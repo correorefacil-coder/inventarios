@@ -25350,14 +25350,27 @@ function resetThemeToDefault() {
 // AUTHENTICATION ENGINE
 function checkAuthentication() {
   const loginOverlay = document.getElementById("loginScreen");
+  const appContainer = document.getElementById("app");
   if (!loginOverlay) return;
 
   if (!appState.authenticated) {
     loginOverlay.classList.remove("hidden");
+    loginOverlay.style.display = "flex";
+    if (appContainer) {
+      appContainer.classList.add("auth-hidden");
+      appContainer.style.display = "none";
+    }
+    document.body.style.overflow = "hidden";
     const emailInput = document.getElementById("loginEmail");
     if (emailInput) setTimeout(() => emailInput.focus(), 100);
   } else {
     loginOverlay.classList.add("hidden");
+    loginOverlay.style.display = "none";
+    if (appContainer) {
+      appContainer.classList.remove("auth-hidden");
+      appContainer.style.display = "block";
+    }
+    document.body.style.overflow = "auto";
   }
 }
 
