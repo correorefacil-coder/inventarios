@@ -10,7 +10,7 @@ const SMTP_HOST = process.env.SMTP_HOST || 'mail.mascampobiotecnologia.com';
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465');
 const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
-const BACKUP_TO_EMAIL = process.env.BACKUP_TO_EMAIL || SMTP_USER;
+const BACKUP_TO_EMAIL = process.env.BACKUP_TO_EMAIL || 'inventarios_mascampo@softproductiva.com';
 
 const ROOT_DIR = path.join(__dirname, '../../');
 const BACKUPS_DIR = path.join(__dirname, '../backups');
