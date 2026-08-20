@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Más Campo - Sistema Centralizado de Inventarios SaaS</title>
+  
+  <!-- SEO & Meta -->
+  <meta name="description" content="Sistema de Gestión de Inventarios Centralizado en la Nube para Más Campo. Control de biotecnología animal, equipos serializados y consumibles.">
+  <meta name="theme-color" content="#0b0f19">
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Main Styles -->
+  <link rel="stylesheet" href="css/styles.css">
+
+  <!-- Anti-FOUC Theme Script -->
+  <script>
+    (function() {
+      try {
+        const savedTheme = localStorage.getItem('mascampo_theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        if (savedTheme === 'custom') {
+          const colors = JSON.parse(localStorage.getItem('mascampo_custom_colors') || '{}');
+          if (colors.bgPrimary) document.documentElement.style.setProperty('--bg-primary', colors.bgPrimary);
+          if (colors.bgSecondary) {
+            document.documentElement.style.setProperty('--bg-secondary', colors.bgSecondary);
+            document.documentElement.style.setProperty('--bg-card', colors.bgSecondary);
+            document.documentElement.style.setProperty('--header-bg', colors.bgSecondary);
+          }
+          if (colors.accent) {
+            document.documentElement.style.setProperty('--accent-green', colors.accent);
+            document.documentElement.style.setProperty('--accent-green-hover', colors.accent);
+          }
+          if (colors.textMain) document.documentElement.style.setProperty('--text-main', colors.textMain);
+          if (colors.textMuted) document.documentElement.style.setProperty('--text-muted', colors.textMuted);
+        }
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+
+  <!-- ========================================== -->
+  <!-- AUTHENTICATION LOGIN OVERLAY (EXACT MATCH TO DESIGN) -->
+  <!-- ========================================== -->
+  <div id="loginScreen" class="login-screen-overlay">
+    <div class="login-card">
+      <h2 class="login-title">Iniciar Sesión</h2>
+
+      <form id="loginForm" onsubmit="handleLoginSubmit(event)">
+        <div class="login-field">
+          <label class="login-label" for="loginEmail">Usuario:</label>
+          <input type="email" id="loginEmail" class="login-input" required autocomplete="email" placeholder="">
+        </div>
+
+        <div class="login-field">
+          <label class="login-label" for="loginPassword">Contraseña:</label>
+          <input type="password" id="loginPassword" class="login-input" required autocomplete="current-password" placeholder="">
+        </div>
+
+        <button type="submit" class="login-btn">
+          Acceder
+        </button>
+      </form>
+
+      <div id="loginErrorMessage" class="login-error" style="display: none;"></div>
+    </div>
+  </div>
+
+  <div id="app">
+    <!-- Header Navigation -->
+    <header class="app-header">
+      <div class="brand-container">
+        <div class="brand-logo" style="background: #10b981; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white;">MC</div>
+        <div>
+          <h1 class="brand-title">MÁS CAMPO</h1>
+          <div class="brand-subtitle">Biotecnología Animal • Inventario Centralizado</div>
+        </div>
+      </div>
+
+      <!-- Sigo Auto Import, Excel Import, Theme Switcher & RBAC Role Selector -->
+      <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+        <input type="file" id="sigoReportFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleSigoReportUpload(event)">
+        
+        <button class="btn btn-primary" id="btnUploadSigoSales" onclick="triggerSigoReportImport()" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">
+          <span>⚡</span> Cargar Cierre Ventas Sigo (Auto)
+        </button>
+
+        <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleExcelUpload(event)">
+        <button class="btn btn-secondary" onclick="document.getElementById('excelFileInput').click()" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">
+          <span>📥</span> Importar Excel 2026
+        </button>
+
+        <!-- Theme Switcher Container -->
+        <div class="theme-switcher-container">
+          <span class="theme-badge" id="currentThemeBadgeIcon">🌙</span>
+          <select id="themeSelector" class="role-select" title="Seleccionar Tema de Apariencia" onchange="handleThemeChange(this.value)">
+            <option value="dark">🌙 Tema Oscuro</option>
+            <option value="light">☀️ Tema Claro</option>
+            <option value="navy">🌊 Azul Marino</option>
+            <option value="emerald">🌿 Esmeralda</option>
+            <option value="custom">🎨 Personalizado...</option>
+          </select>
+          <button class="btn-theme-custom" onclick="openThemeCustomizerModal()" title="Personalizar Colores del Tema">
+            ⚙️
+          </button>
+        </div>
+
+        <!-- Role & User Switcher Container -->
+        <div class="role-switcher-container">
+          <span class="role-badge admin" id="currentRoleBadge">ADMINISTRADOR</span>
+          <select id="roleSelector" class="role-select" title="Cambiar Usuario / Rol de Sesión (RBAC)">
+            <option value="ADMINISTRADOR">Carlos Mendoza (Admin)</option>
+            <option value="LOGISTICA">Jorge Ramos (Logística)</option>
+            <option value="VENTAS">Laura Gómez (Ventas)</option>
+            <option value="SUPERUSER">👑 Superusuario (gerencia@softproductiva.com)</option>
+          </select>
+        </div>
+
+        <!-- User Self-Service Profile Button -->
+        <button class="btn btn-secondary" onclick="openProfileModal()" style="padding: 0.35rem 0.65rem; font-size: 0.8rem;" title="Editar Mi Perfil (Contraseña, Dirección, Teléfono)">
+          👤 Mi Perfil
+        </button>
+
+        <!-- Logout Button -->
+        <button class="btn btn-secondary" onclick="handleLogout()" style="padding: 0.35rem 0.65rem; font-size: 0.8rem; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;" title="Cerrar Sesión Actual">
+          🚪 Cerrar Sesión
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+      <!-- Desktop Sidebar -->
+      <aside class="sidebar">
+        <a class="nav-link active" data-view="view-dashboard">
+          <span class="icon">📊</span> Dashboard & KPIs
+        </a>
+        <a class="nav-link" data-view="view-catalog">
+          <span class="icon">📦</span> Catálogo & Categorías
+        </a>
+        <a class="nav-link" data-view="view-locations">
+          <span class="icon">📍</span> Ubicaciones & Traslados
+        </a>
+        <a class="nav-link" data-view="view-pending-validations">
+          <span class="icon">📋</span> Validaciones Pendientes <span id="pendingValidationBadge" class="badge badge-amber" style="margin-left: 0.3rem; display: none;">0</span>
+        </a>
+        <a class="nav-link" data-view="view-kardex">
+          <span class="icon">🔄</span> Kardex & Soportes
+        </a>
+        <a class="nav-link" data-view="view-equipment">
+          <span class="icon">🩺</span> Hoja de Vida & Garantías
+        </a>
+        <a class="nav-link" data-view="view-customers-analytics">
+          <span class="icon">👤</span> Clientes & Analítica 360°
+        </a>
+        <a class="nav-link" data-view="view-reservations">
+          <span class="icon">🔒</span> Reservas & Bloqueos
+        </a>
+        <a class="nav-link" data-view="view-users">
+          <span class="icon">👥</span> Usuarios & Roles
+        </a>
+        <a class="nav-link" data-view="view-audit-logs">
+          <span class="icon">🛡️</span> Log Actividad & IP (Admin)
+        </a>
+        <a class="nav-link" data-view="view-forecasting">
+          <span class="icon">📈</span> Alertas & Regresión
+        </a>
+        <a class="nav-link" data-view="view-reports">
+          <span class="icon">📄</span> Exportar Sigo & Reportes
+        </a>
+      </aside>
+
+      <!-- Content Body -->
+      <main class="content-body">
+
+        <!-- Banner de Ingesta Automática Sigo Activa -->
+        <div class="panel" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%); border-color: var(--border-highlight); margin-bottom: 1rem; padding: 0.75rem 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+          <span style="color: #6ee7b7; font-size: 0.85rem; font-weight: 500;">
+            ⚡ <strong>Motor de Ingesta Automática Sigo Activo</strong>: Cargue su reporte de cierre de caja en 1 clic. El sistema creará los clientes nuevos y descontará el inventario automáticamente.
+          </span>
+          <button class="btn btn-primary" onclick="triggerSigoReportImport()" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+            Cargar Cierre de Caja Sigo
+          </button>
+        </div>
+
+        <!-- Banner de Restricción RBAC Activo -->
+        <div id="rbacBanner" style="display:none;" class="panel" style="background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); margin-bottom: 1rem; padding: 0.75rem 1rem;">
+          <span style="color: #fcd34d; font-size: 0.85rem; font-weight: 500;">
+            ⚠️ Modo <strong><span id="activeRoleName"></span></strong> activo: Los costos base, utilidades y funciones financieras están ocultos según políticas RBAC.
+          </span>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- VIEW 1: DASHBOARD & KPIS -->
+        <!-- ========================================== -->
+        <section id="view-dashboard" class="view-section active">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Resumen Operativo de Inventario</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Monitoreo en tiempo real de bodegas e insumos de biotecnología animal</p>
+            </div>
+            <button class="btn btn-primary" onclick="switchView('view-kardex')">
+              <span>➕</span> Registrar Movimiento
+            </button>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-header">
+                <span class="stat-title">SKUs Registrados</span>
+                <div class="stat-icon green">📦</div>
+              </div>
+              <div class="stat-value" id="statTotalSkus">10</div>
+              <div class="stat-footer">Catálogo Extraído de Excel 2026</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-header">
+                <span class="stat-title">Stock Físico Total</span>
+                <div class="stat-icon blue">🏭</div>
+              </div>
+              <div class="stat-value" id="statPhysicalStock">8432</div>
+              <div class="stat-footer">Unidades totales en bodega</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-header">
+                <span class="stat-title">Stock Bloqueado</span>
+                <div class="stat-icon amber">🔒</div>
+              </div>
+              <div class="stat-value" id="statReservedStock">208</div>
+              <div class="stat-footer">Reservado para clientes</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-header">
+                <span class="stat-title">Equipos en Garantía</span>
+                <div class="stat-icon purple">🩺</div>
+              </div>
+              <div class="stat-value" id="statWarrantyItems">1</div>
+              <div class="stat-footer">Retorno a China / Mantenimiento</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">📌 Últimos Movimientos de Inventario (Kardex en vivo)</h3>
+            </div>
+            <div class="table-responsive">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Tipo Movimiento</th>
+                    <th>Producto SKU</th>
+                    <th>Cantidad</th>
+                    <th>N° Factura</th>
+                    <th>Usuario / Proveedor</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboardMovementsTable">
+                  <!-- JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">🛡️ Trazabilidad de Auditoría Inmutable (Últimos Eventos)</h3>
+            </div>
+            <div class="audit-box" id="auditLogBox">
+              <!-- JS -->
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 2: CATÁLOGO DUAL & CATEGORÍAS -->
+        <!-- ========================================== -->
+        <section id="view-catalog" class="view-section">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Catálogo de Productos & Categorías Personalizadas</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Clasificación dinámica por categorías (desechables, ingeribles, diagnóstico, laboratorio)</p>
+            </div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="btn btn-secondary" id="btnNewCategory" onclick="openCategoryModal()">
+                <span>📁</span> + Nueva Categoría
+              </button>
+              <button class="btn btn-primary" id="btnNewProduct" onclick="openProductModal()">
+                <span>➕</span> Nuevo Producto
+              </button>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="form-row" style="margin-bottom: 1rem;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <input type="text" id="catalogSearch" class="form-control" placeholder="🔍 Buscar por SKU (Ej. MC 001), Nombre..." oninput="renderCatalog()">
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <select id="catalogCategoryFilter" class="form-control" onchange="renderCatalog()">
+                  <!-- JS -->
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <select id="catalogLocationFilter" class="form-control" onchange="renderCatalog()">
+                  <option value="ALL">📍 Todas las Ubicaciones / Sedes</option>
+                  <!-- JS -->
+                </select>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Nombre / Descripción</th>
+                    <th>Categoría</th>
+                    <th>Stock Total</th>
+                    <th>Desglose por Ubicación (Sedes)</th>
+                    <th class="cost-column">Costo Base</th>
+                    <th class="cost-column">Precio Venta</th>
+                    <th>Disponible</th>
+                    <th>Inspeccionar</th>
+                  </tr>
+                </thead>
+                <tbody id="catalogTableBody">
+                  <!-- JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW: VALIDACIONES PENDIENTES DE INVENTARIO -->
+        <!-- ========================================== -->
+        <section id="view-pending-validations" class="view-section">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">📋 Validaciones Pendientes de Ingreso de Inventario</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">
+                Los ingresos registrados por el rol <strong>Logística</strong> permanecen aquí en borrador hasta que un <strong>Administrador</strong> los revise, edite si es necesario y los apruebe.
+              </p>
+            </div>
+          </div>
+
+          <!-- Pending Intakes List Panel -->
+          <div class="panel">
+            <div class="panel-header" style="margin-bottom: 1rem;">
+              <h3 style="font-size: 1.05rem; font-weight: 600;">📥 Solicitudes de Ingreso en Cola</h3>
+              <div style="display: flex; gap: 0.5rem;">
+                <select id="pendingStatusFilter" class="form-control" style="width: auto; padding: 0.3rem 0.6rem; font-size: 0.85rem;" onchange="renderPendingValidationsView()">
+                  <option value="PENDIENTE_VALIDACION">⏳ Pendientes de Validación</option>
+                  <option value="ALL">Todas (Pendientes, Aprobadas, Rechazadas)</option>
+                  <option value="APROBADO">🟢 Aprobadas</option>
+                  <option value="RECHAZADO">🔴 Rechazadas</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>Fecha Solicitud</th>
+                    <th>Usuario (Logística)</th>
+                    <th>Producto / SKU</th>
+                    <th>Sede Destino</th>
+                    <th>Cant. Propuesta</th>
+                    <th>Seriales</th>
+                    <th>Factura / Remisión</th>
+                    <th>Estado</th>
+                    <th>Acciones de Administración</th>
+                  </tr>
+                </thead>
+                <tbody id="pendingIntakesTableBody">
+                  <!-- Rendered dynamically by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 3: KARDEX & SOPORTES MULTIPLES -->
+        <!-- ========================================== -->
+        <section id="view-kardex" class="view-section">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Movimientos Kardex & Carga Múltiple de Soportes</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Adjunte fotos de mercancía recibida, facturas de proveedor, declaraciones DIAN o remisiones firmadas</p>
+            </div>
+            <button class="btn btn-camera" onclick="openCameraModal()">
+              <span>📷</span> Abrir Escáner de Cámara Mobile
+            </button>
+          </div>
+
+          <div class="panel">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Registrar Nuevo Movimiento</h3>
+            <form id="movementForm" onsubmit="handleCreateMovement(event)">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="movType">Tipo de Movimiento *</label>
+                  <select id="movType" class="form-control" required onchange="toggleInvoiceRequirement()">
+                    <option value="INGRESO_COMPRA">Ingreso (Compra / Importación)</option>
+                    <option value="SALIDA_VENTA">Salida (Venta a Cliente)</option>
+                    <option value="AJUSTE">Ajuste de Inventario</option>
+                    <option value="GARANTIA_REEMPLAZO">Garantía / Reemplazo</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="movProduct">Producto *</label>
+                  <select id="movProduct" class="form-control" required onchange="handleProductSelectForMovement()">
+                    <!-- JS -->
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="movQuantity">Cantidad *</label>
+                  <input type="number" id="movQuantity" class="form-control" min="1" value="1" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="movInvoice">Número de Factura <span id="invoiceReqBadge" style="color:#ef4444; display:none;">(Obligatorio para Salida)</span></label>
+                  <input type="text" id="movInvoice" class="form-control" placeholder="Ej. 13837/ 7691">
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="movCustomer">Cliente / Proveedor Asociado</label>
+                  <select id="movCustomer" class="form-control">
+                    <!-- JS -->
+                  </select>
+                </div>
+
+                <div class="form-group" id="serialInputGroup" style="display:none;">
+                  <label class="form-label" for="movSerial">Número de Serie (Requerido)</label>
+                  <input type="text" id="movSerial" class="form-control" placeholder="Escanee o digite serial (Ej. SN-DWH-2026-S102)">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">📎 Adjuntar Fotografías o Archivos de Soporte (Factura, Fotos de caja, DIAN, Remisión)</label>
+                <input type="file" id="movFilesInput" class="form-control" multiple accept="image/*, .pdf">
+                <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
+                  Puede seleccionar múltiples fotos o documentos PDF como respaldo inmutable de este movimiento.
+                </span>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="movNotes">Observaciones / Motivo del Movimiento</label>
+                <textarea id="movNotes" class="form-control" rows="2" placeholder="Detalles de la transacción"></textarea>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem;">
+                <span>💾</span> Confirmar y Registrar en Kardex con Soportes
+              </button>
+            </form>
+          </div>
+
+          <div class="panel">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Historial Completo con Soportes Adjuntos</h3>
+            <div class="table-responsive">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Factura N°</th>
+                    <th>Cliente / Proveedor</th>
+                    <th>Usuario</th>
+                    <th>Soportes Adjuntos</th>
+                  </tr>
+                </thead>
+                <tbody id="kardexTableBody">
+                  <!-- JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 4: HOJA DE VIDA & BUSCADOR INVERSO GARANTÍAS -->
+        <!-- ========================================== -->
+        <section id="view-equipment" class="view-section">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Hoja de Vida & Consulta Inversa de Garantías por Serial</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Búsqueda directa por número de serie con autocompletado en vivo y escáner de cámara</p>
+            </div>
+          </div>
+
+          <div class="panel" style="background: linear-gradient(135deg, rgba(17, 24, 39, 0.9) 0%, rgba(16, 185, 129, 0.1) 100%); border-color: var(--border-highlight);">
+            <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--accent-green); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+              🛡️ Consultar Cobertura de Garantía & Devolución por Serial
+            </h3>
+            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
+              Búsqueda inteligente: Digite cualquier fragmento del serial (Ej. <strong style="color: var(--accent-green);">006</strong>), escanee con la cámara o seleccione de la lista.
+            </p>
+
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-start;">
+              <div class="suggestions-wrapper" style="flex: 1; min-width: 250px;">
+                <input type="text" id="warrantySerialInput" class="form-control" placeholder="Digite o escanee serial (Ej. 006 o SN-MC-003...)" oninput="handleWarrantySerialInput(event)" autocomplete="off">
+                <div id="warrantySerialSuggestions" class="suggestions-box"></div>
+              </div>
+              
+              <button class="btn btn-camera" onclick="openCameraForWarranty()">
+                <span>📷</span> Escanear con Cámara
+              </button>
+
+              <button class="btn btn-primary" onclick="lookupWarrantyBySerial()">
+                🔍 Buscar Serial & Cobertura
+              </button>
+            </div>
+
+            <div id="warrantyResultCard" style="margin-top: 1.25rem; display: none;"></div>
+          </div>
+
+          <div class="panel">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Selección Directa de Hoja de Vida</h3>
+            <div class="form-row">
+              <div class="form-group" style="flex: 2;">
+                <label class="form-label" for="equipmentSerialSelect">Seleccionar Equipo por Número de Serie</label>
+                <select id="equipmentSerialSelect" class="form-control" onchange="renderEquipmentLifeCycle()">
+                  <!-- JS -->
+                </select>
+              </div>
+              <div class="form-group" style="align-self: flex-end;">
+                <button class="btn btn-primary" onclick="openAddEventModal()">
+                  <span>📋</span> + Evento con Fotos/Soportes
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div id="equipmentDetailCard" class="panel" style="display:none;">
+            <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+              <div>
+                <h3 id="eqName" style="font-size: 1.2rem; color: var(--text-main); font-weight: 700;"></h3>
+                <div style="font-size: 0.85rem; color: var(--text-muted);">
+                  SKU: <strong id="eqSku"></strong> | Serial: <strong id="eqSerial" style="color: var(--accent-green); font-family: monospace;"></strong>
+                </div>
+              </div>
+              <div>
+                <span id="eqStatusBadge" class="badge badge-green">EN_STOCK</span>
+              </div>
+            </div>
+
+            <div style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); display: grid; gap: 1rem; background: rgba(15, 23, 42, 0.6); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.5rem;">
+              <div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Fecha de Ingreso a Bodega</div>
+                <div id="eqEntryDate" style="font-weight: 600;">-</div>
+              </div>
+              <div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Cliente Comprador</div>
+                <div id="eqCustomer" style="font-weight: 600;">-</div>
+              </div>
+              <div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Total Eventos / Mantenimientos</div>
+                <div id="eqMaintenanceCount" style="font-weight: 600;">0</div>
+              </div>
+            </div>
+
+            <h4 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem;">Timeline de Eventos y Retorno a China por Garantía</h4>
+            <div id="equipmentTimeline" class="timeline">
+              <!-- JS -->
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 5: DIRECTORIO DE CLIENTES & ANALÍTICA 360° -->
+        <!-- ========================================== -->
+        <section id="view-customers-analytics" class="view-section">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Directorio de Clientes & Analítica Comercial 360°</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Sanitización de NIT (con DV separado) vs Cédula, historial de seriales y analítica financiera</p>
+            </div>
+          </div>
+
+          <!-- Direct Directory Search -->
+          <div class="panel">
+            <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem;">🔍 Búsqueda Multi-Criterio de Clientes (Excel 2026)</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="customerTypeFilter">Tipo de Documento</label>
+                <select id="customerTypeFilter" class="form-control" onchange="renderCustomers()">
+                  <option value="ALL">Todos (NIT y Cédula)</option>
+                  <option value="NIT">NIT (Persona Jurídica)</option>
+                  <option value="CEDULA">Cédula (Persona Natural)</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="flex: 2;">
+                <label class="form-label" for="customerDirectorySearch">Buscar por NIT (sin puntos), Nombre, Ciudad, Teléfono...</label>
+                <input type="text" id="customerDirectorySearch" class="form-control" placeholder="Ej. 900138371, DON PEDRO, Villavicencio..." oninput="renderCustomers()">
+              </div>
+            </div>
+
+            <div class="table-responsive" style="margin-top: 1rem;">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>Tipo</th>
+                    <th>Documento Sanitizado (Limpio)</th>
+                    <th>Nombre / Razón Social</th>
+                    <th>Ciudad</th>
+                    <th>Teléfono</th>
+                    <th>Total Invertido</th>
+                    <th>Inspección 360°</th>
+                  </tr>
+                </thead>
+                <tbody id="customersTableBody">
+                  <!-- JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Customer 360° Profile Dashboard -->
+          <div class="panel" style="background: linear-gradient(135deg, rgba(17, 24, 39, 0.95) 0%, rgba(139, 92, 246, 0.1) 100%); border-color: var(--border-highlight);">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+              <div>
+                <span class="badge badge-purple" style="font-size: 0.8rem; margin-bottom: 0.3rem;">👤 PERFIL 360° SELECCIONADO</span>
+                <h3 id="cust360Name" style="font-size: 1.35rem; font-weight: 800; color: var(--text-main);">FINCA DON PEDRO PMO S.A.S</h3>
+                <div style="font-size: 0.85rem; color: var(--text-muted);">
+                  <span id="cust360Doc">NIT: 900138371-1</span> • <span id="cust360City">Villavicencio</span> • Tel: <span id="cust360Phone">+57 310 456 7890</span> • Email: <span id="cust360Email">donpedro@finca.co</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Financial KPIs -->
+            <div style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); display: grid; gap: 1rem; margin-bottom: 1.5rem;">
+              <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-color); padding: 1rem; border-radius: var(--radius-md);">
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Total Comprado en Pesos ($ COP)</div>
+                <div id="cust360TotalSpent" style="font-size: 1.5rem; font-weight: 800; color: var(--accent-green);">$0 COP</div>
+              </div>
+
+              <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-color); padding: 1rem; border-radius: var(--radius-md);">
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Total Unidades Físicas</div>
+                <div id="cust360TotalUnits" style="font-size: 1.5rem; font-weight: 800; color: var(--accent-blue);">0 Unidades</div>
+              </div>
+
+              <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-color); padding: 1rem; border-radius: var(--radius-md);">
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Ticket Promedio de Compra</div>
+                <div id="cust360AvgTicket" style="font-size: 1.3rem; font-weight: 700; color: var(--accent-purple);">$0 COP</div>
+              </div>
+
+              <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-color); padding: 1rem; border-radius: var(--radius-md);">
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Frecuencia Semestral Est.</div>
+                <div id="cust360SemesterFreq" style="font-size: 1.3rem; font-weight: 700; color: var(--accent-amber);">0 Unds / Semestre</div>
+              </div>
+            </div>
+
+            <!-- Serialized Items & Purchases Table -->
+            <div style="margin-bottom: 1.5rem;">
+              <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text-main);">
+                📦 Productos Comprados & Seriales Únicos Asignados
+              </h4>
+              <div class="table-responsive">
+                <table class="custom-table">
+                  <thead>
+                    <tr>
+                      <th>Fecha Venta</th>
+                      <th>SKU - Producto</th>
+                      <th>Categoría</th>
+                      <th>Cantidad</th>
+                      <th>Total Invertido</th>
+                      <th>Serial(es) Asignado(s)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="cust360PurchasedProductsTable">
+                    <!-- JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Active Reservations & Warranties Row -->
+            <div class="form-row">
+              <div style="flex: 1;">
+                <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--accent-amber);">
+                  🔒 Reservas & Stock Bloqueado Actualmente
+                </h4>
+                <div id="cust360ReservationsContainer">
+                  <!-- JS -->
+                </div>
+              </div>
+
+              <div style="flex: 1;">
+                <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--accent-green);">
+                  🛡️ Cobertura de Garantías & Retornos Activos
+                </h4>
+                <div id="cust360WarrantiesContainer">
+                  <!-- JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 6: RESERVAS & BLOQUEOS -->
+        <!-- ========================================== -->
+        <section id="view-reservations" class="view-section">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Base de Clientes y Bloqueo de Stock (Reservas)</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Clientes reales de Más Campo (FINCA DON PEDRO, CARLOS MAURICIO VANEGAS, PREMEX, CASABER)</p>
+            </div>
+            <button class="btn btn-primary" onclick="openReservationModal()">
+              <span>🔒</span> Crear Nueva Reserva de Stock
+            </button>
+          </div>
+
+          <div class="panel">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Reservas Activas de Inventario</h3>
+            <div class="table-responsive">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>ID Reserva</th>
+                    <th>Cliente</th>
+                    <th>Producto</th>
+                    <th>Cantidad Reservada</th>
+                    <th>Motivo / Observación</th>
+                    <th>Fecha Reserva</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="reservationsTableBody">
+                  <!-- JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 7: GESTIÓN DE USUARIOS Y ROLES (ADMIN ONLY) -->
+        <!-- ========================================== -->
+        <section id="view-users" class="view-section">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Gestión de Usuarios y Asignación de Roles (RBAC)</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Administración exclusiva de accesos, permisos y cuentas del sistema</p>
+            </div>
+            <button class="btn btn-primary" id="btnAdminUsers" onclick="openUserModal()">
+              <span>👤</span> + Crear Nuevo Usuario
+            </button>
+          </div>
+
+          <div class="panel">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Usuarios Registrados en el Sistema</h3>
+            <div class="table-responsive">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>Documento</th>
+                    <th>Nombre Completo</th>
+                    <th>Correo Electrónico (Login)</th>
+                    <th>Teléfono & Dirección</th>
+                    <th>Vinculación Laboral</th>
+                    <th>Rol Sistema (RBAC)</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                  <!-- JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 8: LOG DE ACTIVIDAD ILIMITADO & IP (ADMIN ONLY) -->
+        <!-- ========================================== -->
+        <section id="view-audit-logs" class="view-section">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Log de Actividad Ilimitado & Auditoría Forense</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Trazabilidad inmutable de todas las acciones, consultas, importaciones, exportaciones e IPs</p>
+            </div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="btn btn-primary" onclick="exportAuditLogsCSV()">
+                <span>📥</span> Exportar Log a CSV
+              </button>
+              <button class="btn btn-secondary" onclick="downloadAuditLogsJSONFile()" title="Descargar copia de seguridad del archivo físico log completo">
+                <span>💾</span> Respaldo Físico JSON
+              </button>
+            </div>
+          </div>
+
+          <!-- AUDIT FILTERS BAR -->
+          <div class="panel">
+            <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem;">🔍 Filtros Combinados de Auditoría</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="auditActionFilter">Tipo de Acción</label>
+                <select id="auditActionFilter" class="form-control" onchange="renderAuditLogView()">
+                  <option value="ALL">Todas las Acciones</option>
+                  <option value="LOGIN">LOGIN / Sesiones</option>
+                  <option value="CONSULTA">CONSULTAS / Inspección</option>
+                  <option value="IMPORTACION">IMPORTACIONES (Excel / Sigo)</option>
+                  <option value="EXPORTACION">EXPORTACIONES (Reportes)</option>
+                  <option value="CREACION">CREACIÓN (Productos / Usuarios)</option>
+                  <option value="MODIFICACION">MODIFICACIÓN / Kardex</option>
+                  <option value="GARANTIA">GARANTÍAS / Devoluciones</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="auditUserFilter">Usuario</label>
+                <select id="auditUserFilter" class="form-control" onchange="renderAuditLogView()">
+                  <!-- JS -->
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="auditSearch">Palabra Clave / IP</label>
+                <input type="text" id="auditSearch" class="form-control" placeholder="Buscar por palabra, serial, IP..." oninput="renderAuditLogView()">
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Historial Ilimitado de Actividad de Usuarios</h3>
+            <div class="table-responsive">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>Fecha & Hora</th>
+                    <th>Usuario & Rol</th>
+                    <th>Tipo Acción</th>
+                    <th>Detalle de la Operación</th>
+                    <th>Dirección IP</th>
+                    <th>Dispositivo & Navegador</th>
+                  </tr>
+                </thead>
+                <tbody id="auditLogTableBody">
+                  <!-- JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 11: UBICACIONES & TRASLADOS MULTIBODEGA -->
+        <!-- ========================================== -->
+        <section id="view-locations" class="view-section">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">📍 Gestión de Ubicaciones & Traslados Multibodega</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Control de sedes, bodegas, puntos de venta y traslados parciales o totales de mercancía con trazabilidad de seriales</p>
+            </div>
+            <button class="btn btn-primary" id="btnNewLocation" onclick="openLocationModal()">
+              <span>📍</span> + Nueva Ubicación (Sede)
+            </button>
+          </div>
+
+          <!-- LISTADO DE UBICACIONES / BODEGAS -->
+          <div class="panel" style="margin-bottom: 1.5rem;">
+            <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+              🏢 Ubicaciones y Bodegas Registradas
+            </h3>
+            <div class="table-responsive">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>Nombre de Ubicación / Sede</th>
+                    <th>Dirección Física</th>
+                    <th>Teléfono</th>
+                    <th>Encargado</th>
+                    <th>Existencias Alojad@s (SKUs / Unidades)</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="locationsTableBody">
+                  <!-- JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- FORMULARIO DE TRASLADO DE MERCANCÍA EN BODEGAS -->
+          <div class="panel" style="background: var(--bg-glass); border: 1px solid var(--border-highlight);">
+            <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--accent-green); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+              🔄 Registrador de Traslado Parcial o Total de Mercancía
+            </h3>
+
+            <form id="transferStockForm" onsubmit="handleTransferStock(event)">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Producto a Trasladar *</label>
+                  <select id="transferProduct" class="form-control" required onchange="handleTransferProductSelect()">
+                    <!-- JS -->
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Ubicación de Origen *</label>
+                  <select id="transferFromLoc" class="form-control" required onchange="handleTransferProductSelect()">
+                    <!-- JS -->
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Ubicación de Destino *</label>
+                  <select id="transferToLoc" class="form-control" required>
+                    <!-- JS -->
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Cantidad a Trasladar (Unidades) *</label>
+                  <input type="number" id="transferQuantity" class="form-control" required min="1" placeholder="Ej. 50">
+                  <small id="transferStockAvailableHelp" style="color: var(--accent-green); font-weight: 600; font-size: 0.78rem; margin-top: 0.3rem; display: block;"></small>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Número de Guía / Remisión / Notas de Traslado</label>
+                  <input type="text" id="transferNotes" class="form-control" placeholder="Ej. Remisión TR-2026-04, despacho en camión de reparto">
+                </div>
+              </div>
+
+              <!-- CONTENEDOR SELECCIÓN DE SERIALES (Solo si requiere serial) -->
+              <div id="transferSerialGroup" style="display: none; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1rem;">
+                <label class="form-label" style="color: var(--accent-green); font-weight: 600;">
+                  🏷️ Seleccione los Números de Serie específicos que se moverán a la sede de destino:
+                </label>
+                <div id="transferSerialList" style="display: flex; flex-wrap: wrap; gap: 0.5rem; max-height: 160px; overflow-y: auto; margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-dark); border-radius: var(--radius-sm);">
+                  <!-- Checkboxes JS -->
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width: 100%;">
+                ⚡ Confirmar Traslado de Mercancía Entre Sedes
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 9: ALERTAS & REGRESIÓN LINEAL -->
+        <!-- ========================================== -->
+        <section id="view-forecasting" class="view-section">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Alertas Inteligentes & Regresión Lineal Proyectiva</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Evaluación matemática del ritmo de salidas del Excel a 30-60 días</p>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">🚨 Alertas Activas de Stock Mínimo</h3>
+            <div id="lowStockAlertsContainer">
+              <!-- JS -->
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem;">📈 Simulación de Regresión Lineal (Consumo vs Días)</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+              Ecuación: \( Y = a \cdot X + b \) donde $Y$ representa el Stock proyectado y $X$ el día.
+            </p>
+
+            <div class="form-group" style="max-width: 400px; margin-bottom: 1.5rem;">
+              <label class="form-label" for="forecastProductSelect">Seleccionar Producto a Proyectar</label>
+              <select id="forecastProductSelect" class="form-control" onchange="runLinearRegressionForecast()">
+                <!-- JS -->
+              </select>
+            </div>
+
+            <div id="forecastResultsPanel">
+              <!-- JS -->
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 10: EXPORTAR SIGO & REPORTES -->
+        <!-- ========================================== -->
+        <section id="view-reports" class="view-section">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Constructor de Reportes & Interoperabilidad Sigo</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Generación de archivos planos CSV y Excel (.xlsx) estructurados para carga directa en Sigo</p>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">⚡ Generador de Archivos Planos para Sigo Contable</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="rptStartDate">Fecha Inicio</label>
+                <input type="date" id="rptStartDate" class="form-control" value="2026-01-01">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="rptEndDate">Fecha Fin</label>
+                <input type="date" id="rptEndDate" class="form-control" value="2026-12-31">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="rptMovementType">Tipo de Movimiento</label>
+                <select id="rptMovementType" class="form-control">
+                  <option value="ALL">Todos los Movimientos</option>
+                  <option value="SALIDA_VENTA">Salidas / Ventas Facturadas</option>
+                  <option value="INGRESO_COMPRA">Ingresos / Compras Proveedor</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem;">
+              <button class="btn btn-primary" onclick="exportSigoCSV()">
+                <span>📥</span> Descargar Plano CSV para Sigo
+              </button>
+              <button class="btn btn-secondary" onclick="exportSigoXLSX()">
+                <span>📊</span> Exportar Excel Estructurado (.xlsx)
+              </button>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;" class="cost-column">📊 Reporte de Márgenes de Utilidad (Precio Venta - Costo Base)</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted);" class="cost-column">Cálculo: \(\text{Utilidad Total} = (\text{Precio Venta} - \text{Costo Base}) \times \text{Unidades Vendidas}\)</p>
+            <div class="table-responsive cost-column" style="margin-top: 1rem;">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Nombre</th>
+                    <th>Costo Base</th>
+                    <th>Precio Venta</th>
+                    <th>Margen Unitario</th>
+                    <th>Unidades Vendidas</th>
+                    <th>Utilidad Total Est.</th>
+                  </tr>
+                </thead>
+                <tbody id="marginReportTableBody">
+                  <!-- JS -->
+                </tbody>
+              </table>
+            </div>
+
+            <div id="financialRestrictedMsg" style="display:none; color: var(--text-muted); font-size: 0.9rem; padding: 1rem;">
+              🔒 Los reportes de margen financiero y utilidad están restringidos para su rol de usuario.
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+
+    <!-- Mobile Bottom Nav -->
+    <nav class="mobile-nav">
+      <button class="mobile-nav-btn active" data-view="view-dashboard">
+        <span class="icon">📊</span>
+        <span>Inicio</span>
+      </button>
+      <button class="mobile-nav-btn" data-view="view-catalog">
+        <span class="icon">📦</span>
+        <span>Catálogo</span>
+      </button>
+
+      <button class="mobile-nav-btn" data-view="view-customers-analytics">
+        <span class="icon">👤</span>
+        <span>Clientes</span>
+      </button>
+
+      <button class="mobile-nav-btn" data-view="view-kardex">
+        <span class="icon">🔄</span>
+        <span>Kardex</span>
+      </button>
+      <button class="mobile-nav-btn" data-view="view-equipment">
+        <span class="icon">🩺</span>
+        <span>Garantías</span>
+      </button>
+    </nav>
+
+    <!-- Interactive Attachment Preview Modal -->
+    <div id="attachmentPreviewModal" class="modal-overlay">
+      <div class="modal-content" style="max-width: 720px; width: 95%;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+          <h3 id="attachmentPreviewTitle" style="font-size: 1.1rem; font-weight: 700; color: var(--text-main);">📎 Visor de Soporte Digital</h3>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <a id="attachmentDownloadBtn" class="btn btn-primary" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; display: none;" target="_blank">
+              📥 Descargar Original
+            </a>
+            <button class="btn btn-secondary" onclick="closeAttachmentPreviewModal()" style="padding: 0.2rem 0.6rem;">✕</button>
+          </div>
+        </div>
+
+        <div id="attachmentPreviewContainer" style="display: flex; align-items: center; justify-content: center; min-height: 250px;">
+          <!-- JS dynamic content -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Camera Modal Overlay -->
+    <div id="cameraModal" class="modal-overlay">
+      <div class="modal-content">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="font-size: 1.1rem; font-weight: 700;">Lector de Código de Barras por Cámara</h3>
+          <button class="btn btn-secondary" onclick="closeCameraModal()" style="padding: 0.2rem 0.6rem;">✕</button>
+        </div>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem;">Apunte la cámara hacia el código o serial impreso en el equipo o caja.</p>
+        
+        <div class="camera-preview-box">
+          <div class="scanner-laser"></div>
+          <div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 1rem;">
+            [ Stream de Cámara Móvil Activo ]<br>
+            <span style="font-size: 0.75rem; color: var(--accent-green);">Escaneando número de serie de bodega...</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button class="btn btn-primary" style="flex: 1; min-width: 140px;" onclick="simulateBarcodeScan('006')">
+            Escaneo Serial 006 (MC 003)
+          </button>
+          <button class="btn btn-secondary" style="flex: 1; min-width: 140px;" onclick="simulateBarcodeScan('MC 574')">
+            Escaneo Ecógrafo S1
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Product Creation Modal -->
+    <div id="productModal" class="modal-overlay">
+      <div class="modal-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h3 style="font-size: 1.1rem; font-weight: 700;">Crear Nuevo Producto en Catálogo</h3>
+          <button class="btn btn-secondary" onclick="closeProductModal()" style="padding: 0.2rem 0.6rem;">✕</button>
+        </div>
+
+        <form id="newProductForm" onsubmit="handleCreateProduct(event)">
+          <div class="form-group">
+            <label class="form-label">SKU / Código Interno *</label>
+            <input type="text" id="newSku" class="form-control" required placeholder="Ej. MC 999">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nombre del Producto *</label>
+            <input type="text" id="newName" class="form-control" required placeholder="Ej. Ecógrafo Veterinario S0">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Categoría Personalizada *</label>
+              <select id="newCategory" class="form-control" required>
+                <!-- JS -->
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Unidad de Venta *</label>
+              <select id="newUnit" class="form-control" required>
+                <option value="UNIDAD">Unidad</option>
+                <option value="CAJA">Caja</option>
+                <option value="PAQUETE">Paquete</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Requiere Número de Serie *</label>
+              <select id="newReqSerial" class="form-control" required>
+                <option value="true">Sí (Equipo Serializado)</option>
+                <option value="false">No (Manejo por Cantidad)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Stock Mínimo Alerta *</label>
+              <input type="number" id="newMinStock" class="form-control" min="1" value="5" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Costo Base ($) *</label>
+              <input type="number" id="newBaseCost" class="form-control" step="0.01" value="100.00" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Precio de Venta ($) *</label>
+              <input type="number" id="newSalePrice" class="form-control" step="0.01" value="180.00" required>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+            Guardar Producto
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- User Creation / Editing Modal (Admin Only) -->
+    <div id="userModal" class="modal-overlay">
+      <div class="modal-content" style="max-width: 550px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h3 id="userModalTitle" style="font-size: 1.1rem; font-weight: 700;">Crear Nuevo Usuario del Sistema</h3>
+          <button class="btn btn-secondary" onclick="closeUserModal()" style="padding: 0.2rem 0.6rem;">✕</button>
+        </div>
+
+        <form id="newUserForm" onsubmit="handleSaveUser(event)">
+          <input type="hidden" id="userEditId">
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Nombre *</label>
+              <input type="text" id="userFirstName" class="form-control" required placeholder="Ej. Ana María">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Apellido *</label>
+              <input type="text" id="userLastName" class="form-control" required placeholder="Ej. Martínez Pérez">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Documento de Identidad (Cédula/NIT) *</label>
+              <input type="text" id="userDocument" class="form-control" required placeholder="Ej. 1019024812">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Correo Electrónico (Login) *</label>
+              <input type="email" id="userEmail" class="form-control" required placeholder="Ej. amartinez@mascampo.co">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Contraseña *</label>
+              <input type="password" id="userPassword" class="form-control" required placeholder="••••••••">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Teléfono de Contacto *</label>
+              <input type="text" id="userPhone" class="form-control" required placeholder="Ej. +573105551234">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Dirección de Residencia / Oficina *</label>
+            <input type="text" id="userAddress" class="form-control" required placeholder="Ej. Calle 100 # 15-20, Bogotá">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Tipo de Vinculación Laboral *</label>
+              <select id="userVinculacion" class="form-control" required>
+                <option value="Planta (Nómina)">Planta (Nómina)</option>
+                <option value="Contratista">Contratista</option>
+                <option value="Temporal">Temporal</option>
+                <option value="Practicante">Practicante</option>
+                <option value="Honorarios / Servicios">Honorarios / Servicios</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Rol de Acceso (RBAC) *</label>
+              <select id="userRole" class="form-control" required>
+                <option value="ADMINISTRADOR">ADMINISTRADOR (Acceso Total Financiero/Config)</option>
+                <option value="LOGISTICA">LOGISTICA (Bodega / Entradas / Salidas)</option>
+                <option value="VENTAS">VENTAS (Consulta Stock / Reservas)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Estado de la Cuenta *</label>
+            <select id="userActive" class="form-control" required>
+              <option value="true">🟢 Activo (Acceso Permitido)</option>
+              <option value="false">🔴 Desactivo (Acceso Bloqueado)</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+            Guardar Usuario
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- User Self-Service Profile Modal -->
+    <div id="profileModal" class="modal-overlay">
+      <div class="modal-content" style="max-width: 500px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h3 style="font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+            👤 Mi Perfil de Usuario
+          </h3>
+          <button class="btn btn-secondary" onclick="closeProfileModal()" style="padding: 0.2rem 0.6rem;">✕</button>
+        </div>
+
+        <form id="profileForm" onsubmit="handleUpdateProfile(event)">
+          <div style="background: var(--bg-glass); border: 1px solid var(--border-color); padding: 0.75rem 1rem; border-radius: var(--radius-md); margin-bottom: 1rem;">
+            <div style="font-weight: 700; font-size: 1rem; color: var(--text-main);" id="profileDisplayName">Carlos Mendoza</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);" id="profileDisplayEmail">admin@mascampo.co</div>
+            <div style="font-size: 0.75rem; margin-top: 0.3rem;">
+              Doc: <strong id="profileDisplayDoc">1019024812</strong> • Vinculación: <span class="badge badge-purple" id="profileDisplayVinculacion">Planta (Nómina)</span> • Rol: <span class="badge badge-green" id="profileDisplayRole">ADMINISTRADOR</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Nueva Contraseña</label>
+            <input type="password" id="profilePassword" class="form-control" placeholder="Ingrese nueva contraseña (dejar en blanco para mantener la actual)">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Teléfono de Contacto *</label>
+            <input type="text" id="profilePhone" class="form-control" required placeholder="Ej. +573105551234">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Dirección de Residencia / Oficina *</label>
+            <input type="text" id="profileAddress" class="form-control" required placeholder="Ej. Calle 100 # 15-20, Bogotá">
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+            Actualizar Mis Datos
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Location Modal (Create/Edit Location) -->
+    <div id="locationModal" class="modal-overlay">
+      <div class="modal-content" style="max-width: 550px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h3 style="font-size: 1.1rem; font-weight: 700;" id="locationModalTitle">
+            📍 Crear Nueva Ubicación / Bodega
+          </h3>
+          <button class="btn btn-secondary" onclick="closeLocationModal()" style="padding: 0.2rem 0.6rem;">✕</button>
+        </div>
+
+        <form id="locationForm" onsubmit="handleSaveLocation(event)">
+          <input type="hidden" id="locationEditId">
+          
+          <div class="form-group">
+            <label class="form-label">Nombre de la Ubicación / Sede *</label>
+            <input type="text" id="locName" class="form-control" required placeholder="Ej. Punto de Venta Bogotá Norte">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Dirección Física *</label>
+            <input type="text" id="locAddress" class="form-control" required placeholder="Ej. Carrera 15 # 93-40, Bogotá">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Teléfono de Contacto *</label>
+              <input type="text" id="locPhone" class="form-control" required placeholder="Ej. +573153339876">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Encargado de la Ubicación *</label>
+              <input type="text" id="locManager" class="form-control" required placeholder="Ej. Carlos Mendoza">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Estado de la Ubicación *</label>
+            <select id="locActive" class="form-control" required>
+              <option value="true">🟢 Activa (Apta para Almacenamiento)</option>
+              <option value="false">🔴 Inactiva (Cerrada / Mantenimiento)</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+            Guardar Ubicación
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Dynamic Category Modal -->
+    <div id="categoryModal" class="modal-overlay">
+      <div class="modal-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h3 style="font-size: 1.1rem; font-weight: 700;">Crear Nueva Categoría Personalizada</h3>
+          <button class="btn btn-secondary" onclick="closeCategoryModal()" style="padding: 0.2rem 0.6rem;">✕</button>
+        </div>
+
+        <form id="newCategoryForm" onsubmit="handleCreateCategory(event)">
+          <div class="form-group">
+            <label class="form-label">Nombre de la Categoría *</label>
+            <input type="text" id="newCatName" class="form-control" required placeholder="Ej. Consumibles Ingeribles, Kits de Inseminación">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descripción de la Categoría</label>
+            <textarea id="newCatDesc" class="form-control" rows="2" placeholder="Ej. Insumos biológicos, suplementos o productos desechables"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+            Guardar Categoría
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Serial Inspector Modal -->
+    <div id="serialInspectorModal" class="modal-overlay">
+      <div class="modal-content" style="max-width: 650px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <div>
+            <h3 style="font-size: 1.1rem; font-weight: 700;">Inspección Detallada de Seriales</h3>
+            <p id="inspectorProductName" style="font-size: 0.85rem; color: var(--accent-green); font-weight: 600;"></p>
+          </div>
+          <button class="btn btn-secondary" onclick="closeSerialInspectorModal()" style="padding: 0.2rem 0.6rem;">✕</button>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+          <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--accent-green); margin-bottom: 0.5rem;">🟢 Seriales Disponibles Actuales en Bodega:</h4>
+          <div id="inspectorInStockList" style="max-height: 150px; overflow-y: auto;"></div>
+        </div>
+
+        <div>
+          <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--accent-blue); margin-bottom: 0.5rem;">🔵 Seriales Vendidos / Salidos (Historial & Comprador):</h4>
+          <div id="inspectorExitedList" style="max-height: 200px; overflow-y: auto;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reservation Creation Modal -->
+    <div id="reservationModal" class="modal-overlay">
+      <div class="modal-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h3 style="font-size: 1.1rem; font-weight: 700;">Crear Bloqueo / Reserva de Stock</h3>
+          <button class="btn btn-secondary" onclick="closeReservationModal()" style="padding: 0.2rem 0.6rem;">✕</button>
+        </div>
+
+        <form id="newReservationForm" onsubmit="handleCreateReservation(event)">
+          <div class="form-group">
+            <label class="form-label">Cliente Solicitante *</label>
+            <select id="resCustomerSelect" class="form-control" required>
+              <!-- JS -->
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Producto a Reservar *</label>
+            <select id="resProductSelect" class="form-control" required>
+              <!-- JS -->
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Cantidad a Bloquear del Stock Disponible *</label>
+            <input type="number" id="resQuantity" class="form-control" min="1" value="1" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Motivo / Observación de la Reserva *</label>
+            <textarea id="resReason" class="form-control" rows="2" required placeholder="Ej. Reserva para envío a finca"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+            Confirmar Bloqueo de Stock
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL: EDITAR BORRADOR DE INGRESO PENDIENTE -->
+    <!-- ========================================== -->
+    <div id="editPendingIntakeModal" class="modal-overlay">
+      <div class="modal-card" style="max-width: 600px;">
+        <div class="modal-header">
+          <h3 id="editPendingIntakeTitle">✏️ Editar Borrador de Ingreso Propuesto</h3>
+          <button class="btn-close" onclick="closeEditPendingIntakeModal()">✕</button>
+        </div>
+        <form id="editPendingIntakeForm" onsubmit="handleSavePendingIntakeDraft(event)">
+          <input type="hidden" id="pendingIntakeEditId">
+
+          <div class="form-group">
+            <label class="form-label">Producto / SKU</label>
+            <input type="text" id="pendingIntakeProductDisplay" class="form-control" readonly style="background: rgba(0,0,0,0.3); font-weight: 600;">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="pendingIntakeLocation">Ubicación / Sede Destino</label>
+              <select id="pendingIntakeLocation" class="form-control" required>
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="pendingIntakeQuantity">Cantidad Propuesta a Ingresar</label>
+              <input type="number" id="pendingIntakeQuantity" class="form-control" min="1" required style="font-weight: bold; color: var(--accent-green);">
+              <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.2rem;">Editar la cantidad en borrador no genera salidas ni registros de inventario.</small>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="pendingIntakeInvoice">Factura / Remisión</label>
+              <input type="text" id="pendingIntakeInvoice" class="form-control" placeholder="FAC-1234">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="pendingIntakeNotes">Observaciones</label>
+              <input type="text" id="pendingIntakeNotes" class="form-control" placeholder="Notas de recepción...">
+            </div>
+          </div>
+
+          <div id="pendingIntakeSerialsGroup" class="form-group" style="display: none;">
+            <label class="form-label">Números de Serie Propuestos (separados por coma)</label>
+            <textarea id="pendingIntakeSerialsText" class="form-control" rows="3" style="font-family: monospace; font-size: 0.85rem;"></textarea>
+            <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.2rem;">Si modifica la cantidad propuesta, ajuste el total de seriales para hacerlos coincidir.</small>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
+            <button type="button" class="btn btn-secondary" onclick="closeEditPendingIntakeModal()">Cancelar</button>
+            <button type="submit" class="btn btn-primary">💾 Guardar Cambios en Borrador</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Theme Customizer Modal -->
+    <div id="themeModal" class="modal-overlay">
+      <div class="modal-content" style="max-width: 600px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+          <h3 style="font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+            🎨 Personalizador de Tema y Apariencia
+          </h3>
+          <button class="btn btn-secondary" onclick="closeThemeCustomizerModal()" style="padding: 0.2rem 0.6rem;">✕</button>
+        </div>
+
+        <!-- Presets Grid -->
+        <div style="margin-bottom: 1.25rem;">
+          <label class="form-label" style="font-weight: 600; margin-bottom: 0.5rem; display: block;">Seleccionar Tema Predefinido</label>
+          <div class="theme-presets-grid">
+            <div class="preset-card active" id="preset-dark" onclick="selectThemePreset('dark')">
+              <div class="preset-preview" style="background: #0b0f19; border: 1px solid rgba(16, 185, 129, 0.5);">
+                <span style="background: #111827;"></span>
+                <span style="background: #10b981;"></span>
+              </div>
+              <span class="preset-label">🌙 Oscuro</span>
+            </div>
+
+            <div class="preset-card" id="preset-light" onclick="selectThemePreset('light')">
+              <div class="preset-preview" style="background: #f1f5f9; border: 1px solid #cbd5e1;">
+                <span style="background: #ffffff;"></span>
+                <span style="background: #059669;"></span>
+              </div>
+              <span class="preset-label">☀️ Claro</span>
+            </div>
+
+            <div class="preset-card" id="preset-navy" onclick="selectThemePreset('navy')">
+              <div class="preset-preview" style="background: #0a192f; border: 1px solid #64ffda;">
+                <span style="background: #112240;"></span>
+                <span style="background: #64ffda;"></span>
+              </div>
+              <span class="preset-label">🌊 Azul Marino</span>
+            </div>
+
+            <div class="preset-card" id="preset-emerald" onclick="selectThemePreset('emerald')">
+              <div class="preset-preview" style="background: #062c20; border: 1px solid #34d399;">
+                <span style="background: #0a3a2a;"></span>
+                <span style="background: #34d399;"></span>
+              </div>
+              <span class="preset-label">🌿 Esmeralda</span>
+            </div>
+
+            <div class="preset-card" id="preset-custom" onclick="selectThemePreset('custom')">
+              <div class="preset-preview" style="background: linear-gradient(135deg, #ec4899, #8b5cf6, #3b82f6); border: 1px solid #ffffff;">
+                <span>🎨</span>
+              </div>
+              <span class="preset-label">🎨 Personalizar</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Custom Colors Section -->
+        <div id="customColorControls" style="display: none; background: var(--bg-glass); border: 1px solid var(--border-color); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.25rem;">
+          <h4 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--accent-green);">
+            🛠️ Ajuste de Colores Personalizados
+          </h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Color Fondo Principal</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="color" id="pickerBgPrimary" class="color-picker-input" oninput="updateCustomColorsFromPickers()">
+                <input type="text" id="textBgPrimary" class="form-control" style="font-family: monospace;" readonly>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Color Tarjetas / Paneles</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="color" id="pickerBgSecondary" class="color-picker-input" oninput="updateCustomColorsFromPickers()">
+                <input type="text" id="textBgSecondary" class="form-control" style="font-family: monospace;" readonly>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Color Acento Principal</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="color" id="pickerAccent" class="color-picker-input" oninput="updateCustomColorsFromPickers()">
+                <input type="text" id="textAccent" class="form-control" style="font-family: monospace;" readonly>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Color Texto Principal</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="color" id="pickerTextMain" class="color-picker-input" oninput="updateCustomColorsFromPickers()">
+                <input type="text" id="textTextMain" class="form-control" style="font-family: monospace;" readonly>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Preview Box -->
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.25rem;">
+          <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Vista Previa en Tiempo Real</span>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <h4 style="font-size: 0.95rem; font-weight: 600; color: var(--text-main);">MÁS CAMPO SaaS</h4>
+              <p style="font-size: 0.8rem; color: var(--text-muted);">Así lucirán los páneles, listas y botones.</p>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <span class="badge badge-green">Activo</span>
+              <button class="btn btn-primary" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">Boton MÁS CAMPO</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;">
+          <button class="btn btn-secondary" onclick="resetThemeToDefault()" style="font-size: 0.85rem;">
+            🔄 Restablecer Oscuro
+          </button>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-secondary" onclick="closeThemeCustomizerModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="saveThemePreferences()">Guardar Preferencias</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
