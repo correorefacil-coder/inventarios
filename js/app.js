@@ -93193,48 +93193,7 @@ const appState = {
     }
   ],
 
-  movements: [
-    { 
-      id: "mov-1", 
-      date: "2026-01-15", 
-      type: "INGRESO_COMPRA", 
-      productId: "prod-1", 
-      quantity: 8012, 
-      invoiceNumber: "#EX25035", 
-      customerName: "NEW VETEC S.L. (España)", 
-      user: "Carlos Mendoza", 
-      notes: "Importación masiva de fundas TE",
-      attachments: [
-        { name: "Factura_Proveedor_EX25035.pdf", type: "pdf", icon: "📄" }
-      ]
-    },
-    {
-      id: "mov-101",
-      date: "2026-01-20",
-      type: "SALIDA_VENTA",
-      productId: "prod-3",
-      quantity: 1,
-      invoiceNumber: "FACT-SIGO-2026-101",
-      customerName: "FINCA DON PEDRO PMO S.A.S",
-      user: "Laura Gómez",
-      notes: "Venta de Pistola TE con Serial SN-TED-2026-001",
-      attachments: [
-        { name: "Factura_Venta_101.pdf", type: "pdf", icon: "📄" }
-      ]
-    },
-    {
-      id: "mov-102",
-      date: "2026-02-10",
-      type: "SALIDA_VENTA",
-      productId: "prod-1",
-      quantity: 50,
-      invoiceNumber: "FACT-SIGO-2026-108",
-      customerName: "FINCA DON PEDRO PMO S.A.S",
-      user: "Laura Gómez",
-      notes: "Venta de 50 paquetes Fundas TE",
-      attachments: []
-    }
-  ],
+  movements: [],
 
   reservations: [
     { id: "res-101", customerId: "cust-1", productId: "prod-1", quantity: 150, reason: "Apartado jornadas de biotecnología llanos", status: "ACTIVA", date: "2026-01-25" }
