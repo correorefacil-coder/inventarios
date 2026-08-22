@@ -93051,6 +93051,25 @@ async function verifyPassword(plainPasswordInput, storedHash) {
   return computedHash === storedHash;
 }
 
+function validatePasswordPolicy(password) {
+  if (!password || password.length < 8) {
+    return { valid: false, message: "La contraseña debe tener mínimo 8 caracteres." };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: "La contraseña debe incluir al menos una letra MAYÚSCULA (A-Z)." };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, message: "La contraseña debe incluir al menos una letra MINÚSCULA (a-z)." };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, message: "La contraseña debe incluir al menos un NÚMERO (0-9)." };
+  }
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    return { valid: false, message: "La contraseña debe incluir al menos un CARÁCTER ESPECIAL (ej: #, $, @, !, %)." };
+  }
+  return { valid: true };
+}
+
 const systemUsers = [
   {
     id: "usr-super",
@@ -93061,56 +93080,28 @@ const systemUsers = [
     password: "$MAS_CAMPO_SECURE_SALT_2026$80d62fc31a9a7063a8d8bc52ba7434ea84149eb825f21ecc4f09ca5d466f4db4",
     address: "Sede Principal SoftProductiva S.A.S",
     phone: "+573000000000",
-    role: "ADMINISTRADOR",
+    role: "SUPERADMINISTRADOR",
     vinculacion: "Planta (Nómina)",
     active: true,
     createdAt: "2026-01-01",
-    isSuperuser: true
+    isSuperuser: true,
+    mustChangePassword: false
   },
   {
-    id: "usr-1",
-    firstName: "Carlos",
-    lastName: "Mendoza",
-    document: "1019024812",
-    email: "admin@mascampo.co",
-    password: "$MAS_CAMPO_SECURE_SALT_2026$a7c9e050c2c49c5aac2ba2611e0098df9b13a2db9d17a23f7037e26f0b4e95cf",
-    address: "Calle 100 # 15-20, Bogotá",
-    phone: "+573105551234",
+    id: "usr-leyla",
+    firstName: "Leyla Caterine",
+    lastName: "Bernal",
+    document: "1020304050",
+    email: "mascmpo@gmail.com",
+    password: "$MAS_CAMPO_SECURE_SALT_2026$7ebedda5ac3020c1e30eb1eda96f7f99bf98de4214406df45d7997dff144b6fe",
+    address: "Sede Principal Más Campo",
+    phone: "3102607947",
     role: "ADMINISTRADOR",
-    vinculacion: "Planta (Nómina)",
+    vinculacion: "Gerente General",
     active: true,
-    createdAt: "2026-01-01",
-    isSuperuser: false
-  },
-  {
-    id: "usr-2",
-    firstName: "Jorge",
-    lastName: "Ramos",
-    document: "80123456",
-    email: "logistica@mascampo.co",
-    password: "$MAS_CAMPO_SECURE_SALT_2026$25703dc763780f7b7776ad93daf0ce387a9e22780e157ec251faf3b3cf360361",
-    address: "Av. El Dorado # 68-90, Bodega 4, Bogotá",
-    phone: "+573204445678",
-    role: "LOGISTICA",
-    vinculacion: "Contratista",
-    active: true,
-    createdAt: "2026-01-10",
-    isSuperuser: false
-  },
-  {
-    id: "usr-3",
-    firstName: "Laura",
-    lastName: "Gómez",
-    document: "52987654",
-    email: "ventas@mascampo.co",
-    password: "$MAS_CAMPO_SECURE_SALT_2026$efb0bb33a8e13a14bfb9f8763ae6f8071831676a783da679e7b0742b31ac6bc7",
-    address: "Carrera 7 # 71-21, Oficina 502, Bogotá",
-    phone: "+573153339876",
-    role: "VENTAS",
-    vinculacion: "Temporal",
-    active: true,
-    createdAt: "2026-01-15",
-    isSuperuser: false
+    createdAt: "2026-08-22",
+    isSuperuser: false,
+    mustChangePassword: true
   }
 ];
 
@@ -93716,6 +93707,61 @@ async function handleLoginSubmit(event) {
 
   if (errorMsgBox) errorMsgBox.style.display = "none";
 
+  // Check if mandatory first login password change is required
+  if (matchingUser.mustChangePassword) {
+    pendingForceChangeUser = matchingUser;
+    document.getElementById("forcePasswordChangeModal").classList.add("active");
+    return;
+  }
+
+  completeLoginProcess(matchingUser);
+}
+
+let pendingForceChangeUser = null;
+
+async function handleForcePasswordChange(event) {
+  event.preventDefault();
+  const newPwd = document.getElementById("forceNewPassword").value;
+  const confirmPwd = document.getElementById("forceConfirmPassword").value;
+
+  if (newPwd !== confirmPwd) {
+    alert("❌ La confirmación de contraseña no coincide. Verifique e intente de nuevo.");
+    return;
+  }
+
+  const validation = validatePasswordPolicy(newPwd);
+  if (!validation.valid) {
+    alert(`⚠️ Requisito de Seguridad no cumplido:\n\n${validation.message}`);
+    return;
+  }
+
+  if (!pendingForceChangeUser) {
+    alert("❌ Error: No hay sesión pendiente de cambio.");
+    return;
+  }
+
+  const hashed = await hashPassword(newPwd);
+  pendingForceChangeUser.password = hashed;
+  pendingForceChangeUser.mustChangePassword = false;
+
+  const uObj = appState.users.find(u => u.id === pendingForceChangeUser.id || u.email === pendingForceChangeUser.email);
+  if (uObj) {
+    uObj.password = hashed;
+    uObj.mustChangePassword = false;
+  }
+  saveUsersToDisk();
+
+  addActivityLog("CAMBIO_PASSWORD_OBLIGATORIO", "UserSecurity", `Usuario '${pendingForceChangeUser.email}' estableció su nueva contraseña personal por primer ingreso.`);
+
+  alert("✅ ¡Contraseña configurada exitosamente! Bienvenido al sistema.");
+  document.getElementById("forcePasswordChangeModal").classList.remove("active");
+
+  const targetUser = pendingForceChangeUser;
+  pendingForceChangeUser = null;
+  completeLoginProcess(targetUser);
+}
+
+function completeLoginProcess(matchingUser) {
   appState.currentUser = {
     id: matchingUser.id,
     name: `${matchingUser.firstName || ''} ${matchingUser.lastName || matchingUser.name || ''}`.trim(),
@@ -94584,6 +94630,12 @@ async function handleSaveUser(e) {
       return;
     }
 
+    const pwdValidation = validatePasswordPolicy(password);
+    if (!pwdValidation.valid) {
+      alert(`⚠️ ERROR DE SEGURIDAD EN CONTRASEÑA:\n\n${pwdValidation.message}`);
+      return;
+    }
+
     const hashedPassword = await hashPassword(password);
 
     const newUser = {
@@ -94600,7 +94652,8 @@ async function handleSaveUser(e) {
       role,
       active,
       createdAt: new Date().toISOString().substring(0, 10),
-      isSuperuser: (email === 'gerencia@softproductiva.com')
+      isSuperuser: (email === 'gerencia@softproductiva.com'),
+      mustChangePassword: true
     };
 
     appState.users.push(newUser);

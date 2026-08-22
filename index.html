@@ -114,9 +114,7 @@
         <div class="role-switcher-container">
           <span class="role-badge admin" id="currentRoleBadge">ADMINISTRADOR</span>
           <select id="roleSelector" class="role-select" title="Cambiar Usuario / Rol de Sesión (RBAC)">
-            <option value="ADMINISTRADOR">Carlos Mendoza (Admin)</option>
-            <option value="LOGISTICA">Jorge Ramos (Logística)</option>
-            <option value="VENTAS">Laura Gómez (Ventas)</option>
+            <option value="ADMINISTRADOR">Leyla Caterine Bernal (Gerente General)</option>
             <option value="SUPERUSER">👑 Superusuario (gerencia@softproductiva.com)</option>
           </select>
         </div>
@@ -1317,6 +1315,46 @@
 
           <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1.2rem; background: var(--accent-green);">
             💾 Guardar Cambios en Producto e Inventario
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Mandatory First Login Password Change Modal -->
+    <div id="forcePasswordChangeModal" class="modal-overlay" style="z-index: 99999; backdrop-filter: blur(10px);">
+      <div class="modal-content" style="max-width: 480px; border: 2px solid var(--accent-amber);">
+        <div style="text-align: center; margin-bottom: 1.2rem;">
+          <div style="font-size: 2.5rem; margin-bottom: 0.3rem;">🔐</div>
+          <h3 style="font-size: 1.2rem; font-weight: 800; color: var(--accent-amber);">Cambio Obligatorio de Contraseña</h3>
+          <p style="font-size: 0.83rem; color: var(--text-muted); margin-top: 0.3rem;">
+            Por políticas de seguridad, al ser su primer ingreso debe asignar una nueva contraseña personal para continuar.
+          </p>
+        </div>
+
+        <form id="forcePasswordChangeForm" onsubmit="handleForcePasswordChange(event)">
+          <div class="form-group">
+            <label class="form-label">Nueva Contraseña *</label>
+            <input type="password" id="forceNewPassword" class="form-control" required placeholder="Mínimo 8 caracteres, Mayúscula, Minúscula, Número y Especial">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Confirmar Nueva Contraseña *</label>
+            <input type="password" id="forceConfirmPassword" class="form-control" required placeholder="Repita la nueva contraseña">
+          </div>
+
+          <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); padding: 0.85rem; border-radius: var(--radius-sm); margin-bottom: 1.2rem; font-size: 0.78rem; color: var(--text-main);">
+            📌 <strong>Requisitos obligatorios de contraseña:</strong>
+            <ul style="margin: 0.4rem 0 0 1.2rem; padding: 0;">
+              <li>Mínimo 8 caracteres</li>
+              <li>Al menos 1 letra MAYÚSCULA (A-Z)</li>
+              <li>Al menos 1 letra MINÚSCULA (a-z)</li>
+              <li>Al menos 1 NÚMERO (0-9)</li>
+              <li>Al menos 1 CARÁCTER ESPECIAL (#, $, @, !, %, &, etc.)</li>
+            </ul>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; background: var(--accent-amber); border-color: var(--accent-amber); color: #000; font-weight: 700;">
+            🔒 Establecer Nueva Contraseña y Entrar
           </button>
         </form>
       </div>
