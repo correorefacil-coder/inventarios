@@ -93111,36 +93111,22 @@ const initialLocations = [
   { id: "loc-3", name: "Almacén Central Llanos", address: "Km 4 Vía Villavicencio - Acacías", phone: "+573187779900", manager: "Carlos Mendoza", active: true }
 ];
 
-const initialAuditLogs = [
-  {
-    id: "log-101",
-    timestamp: "2026-08-06 13:35:00",
-    userName: "Carlos Mendoza",
-    userEmail: "admin@mascampo.co",
-    roleName: "ADMINISTRADOR",
-    actionType: "LOGIN",
-    entityName: "SystemSession",
-    description: "Inicio de sesión exitoso. Autenticado en plataforma.",
-    ipAddress: "190.157.24.110",
-    deviceType: "Desktop (Linux x86_64 / Chrome 124)",
-    userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
-  }
-];
+const initialAuditLogs = [];
 
 const appState = {
   authenticated: false,
 
   currentUser: {
-    id: "usr-1",
-    name: "Carlos Mendoza",
-    firstName: "Carlos",
-    lastName: "Mendoza",
-    document: "1019024812",
-    email: "admin@mascampo.co",
+    id: "usr-leyla",
+    name: "Leyla Caterine Bernal",
+    firstName: "Leyla Caterine",
+    lastName: "Bernal",
+    document: "1020304050",
+    email: "mascmpo@gmail.com",
     role: "ADMINISTRADOR",
-    vinculacion: "Planta (Nómina)",
-    address: "Calle 100 # 15-20, Bogotá",
-    phone: "+573105551234",
+    vinculacion: "Gerente General",
+    address: "Sede Principal Más Campo",
+    phone: "3102607947",
     active: true
   },
 
@@ -93207,14 +93193,30 @@ function getClientIp() {
 function loadPersistedAuditLogs() {
   try {
     const saved = localStorage.getItem("mascampo_audit_logs_db");
+    const oneHourAgoMs = Date.now() - (60 * 60 * 1000); // 1 hour ago limit
+
+    let logs = [];
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        appState.auditLogs = parsed;
-      }
+      if (Array.isArray(parsed)) logs = parsed;
     }
+
+    // Filter logs to keep ONLY events from the last 1 hour and exclude old demo users
+    appState.auditLogs = logs.filter(log => {
+      if (!log || !log.timestamp) return false;
+      if (log.userName === 'Carlos Mendoza' || log.userEmail === 'admin@mascampo.co' || (log.description && log.description.includes('admin@mascampo.co'))) {
+        return false;
+      }
+      
+      const logDate = new Date(log.timestamp.replace(' ', 'T'));
+      if (isNaN(logDate.getTime())) return false;
+      return logDate.getTime() >= oneHourAgoMs;
+    });
+
+    saveAuditLogsToDisk();
   } catch (e) {
     console.warn("No se pudo cargar log persistido de auditoría", e);
+    appState.auditLogs = [];
   }
 }
 
