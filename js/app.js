@@ -94495,12 +94495,13 @@ function renderUsers() {
     const addressDisplay = u.address || 'N/A';
     const vincDisplay = u.vinculacion || 'Planta (Nómina)';
     const roleClass = u.role === 'ADMINISTRADOR' ? 'badge-red' : u.role === 'LOGISTICA' ? 'badge-amber' : 'badge-blue';
+    const isSuperAccount = (u.email === 'gerencia@softproductiva.com' || u.isSuperuser);
 
     return `
       <tr>
         <td><strong style="font-family: monospace; color: var(--accent-green);">${docDisplay}</strong></td>
         <td>
-          <div style="font-weight: 600; color: var(--text-main);">${fullName} ${u.isSuperuser ? '👑' : ''}</div>
+          <div style="font-weight: 600; color: var(--text-main);">${fullName} ${isSuperAccount ? '👑' : ''}</div>
           <div style="font-size: 0.73rem; color: var(--text-muted);">ID: ${u.id}</div>
         </td>
         <td><strong>${u.email}</strong></td>
@@ -94518,17 +94519,21 @@ function renderUsers() {
         </td>
         <td>
           <span class="badge ${u.active ? 'badge-green' : 'badge-red'}">
-            ${u.active ? '🟢 Activo' : '🔴 Desactivo'}
+            ${isSuperAccount ? '👑 Activo Vitalicio' : (u.active ? '🟢 Activo' : '🔴 Desactivo')}
           </span>
         </td>
         <td>
-          <div style="display: flex; gap: 0.3rem;">
+          <div style="display: flex; gap: 0.3rem; align-items: center;">
             <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.73rem;" onclick="openUserModal('${u.id}')">
               ✏️ Editar
             </button>
-            <button class="btn ${u.active ? 'btn-danger' : 'btn-primary'}" style="padding: 0.2rem 0.5rem; font-size: 0.73rem;" onclick="toggleUserStatus('${u.id}')">
-              ${u.active ? '🔴 Desactivar' : '🟢 Activar'}
-            </button>
+            ${isSuperAccount ? `
+              <span class="badge badge-purple" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;" title="Cuenta de Infraestructura Inmutable">🔒 Vitalicio</span>
+            ` : `
+              <button class="btn ${u.active ? 'btn-danger' : 'btn-primary'}" style="padding: 0.2rem 0.5rem; font-size: 0.73rem;" onclick="toggleUserStatus('${u.id}')">
+                ${u.active ? '🔴 Desactivar' : '🟢 Activar'}
+              </button>
+            `}
           </div>
         </td>
       </tr>
@@ -94565,11 +94570,19 @@ function openUserModal(userId = null) {
     document.getElementById("userAddress").value = user.address || "";
     document.getElementById("userVinculacion").value = user.vinculacion || "Planta (Nómina)";
     document.getElementById("userRole").value = user.role || "ADMINISTRADOR";
-    document.getElementById("userActive").value = user.active ? "true" : "false";
+    
+    const isSuperAccount = (user.email === 'gerencia@softproductiva.com' || user.isSuperuser);
+    const activeSelect = document.getElementById("userActive");
+    if (activeSelect) {
+      activeSelect.value = "true";
+      activeSelect.disabled = isSuperAccount;
+    }
   } else {
     if (title) title.textContent = "👤 Crear Nuevo Usuario del Sistema";
     if (editIdInput) editIdInput.value = "";
     if (form) form.reset();
+    const activeSelect = document.getElementById("userActive");
+    if (activeSelect) activeSelect.disabled = false;
   }
 
   modal.classList.add("active");
@@ -94592,11 +94605,12 @@ async function handleSaveUser(e) {
   const address = document.getElementById("userAddress").value.trim();
   const vinculacion = document.getElementById("userVinculacion").value;
   const role = document.getElementById("userRole").value;
-  const active = document.getElementById("userActive").value === "true";
+  const activeInput = document.getElementById("userActive").value === "true";
 
   if (editId) {
     const user = appState.users.find(u => u.id === editId);
     if (user) {
+      const isSuperAccount = (user.email === 'gerencia@softproductiva.com' || user.isSuperuser);
       user.firstName = firstName;
       user.lastName = lastName;
       user.name = `${firstName} ${lastName}`;
@@ -94609,8 +94623,9 @@ async function handleSaveUser(e) {
       user.address = address;
       user.vinculacion = vinculacion;
       user.role = role;
-      user.active = active;
+      user.active = isSuperAccount ? true : activeInput;
 
+      saveUsersToDisk();
       addActivityLog("MODIFICACION", "UserManagement", `Actualización de datos de usuario '${user.email}' (Vinculación: ${vinculacion}, Rol: ${role})`);
       alert(`✅ Usuario '${user.email}' actualizado con éxito.`);
     }
@@ -94628,6 +94643,7 @@ async function handleSaveUser(e) {
     }
 
     const hashedPassword = await hashPassword(password);
+    const isSuperAccount = (email === 'gerencia@softproductiva.com');
 
     const newUser = {
       id: `usr-${Date.now()}`,
@@ -94641,13 +94657,14 @@ async function handleSaveUser(e) {
       address,
       vinculacion,
       role,
-      active,
+      active: isSuperAccount ? true : activeInput,
       createdAt: new Date().toISOString().substring(0, 10),
-      isSuperuser: (email === 'gerencia@softproductiva.com'),
+      isSuperuser: isSuperAccount,
       mustChangePassword: true
     };
 
     appState.users.push(newUser);
+    saveUsersToDisk();
     addActivityLog("CREACION", "UserManagement", `Creación de nuevo usuario '${email}' (Vinculación: ${vinculacion}, Rol: ${role})`);
     alert(`✅ Usuario '${email}' creado exitosamente.`);
   }
@@ -94665,12 +94682,16 @@ function toggleUserStatus(userId) {
   const user = appState.users.find(u => u.id === userId);
   if (!user) return;
 
-  if (user.email === 'gerencia@softproductiva.com' && appState.currentUser.email !== 'gerencia@softproductiva.com') {
-    alert("🔒 Acción denegada: No tiene permisos para modificar la cuenta del Superusuario.");
+  if (user.email === 'gerencia@softproductiva.com' || user.isSuperuser) {
+    alert("🔒 Restricción de Seguridad Imposible de Anular: La cuenta del Superusuario es Vitalicia y no puede ser desactivada.");
+    user.active = true;
+    saveUsersToDisk();
+    renderUsers();
     return;
   }
 
   user.active = !user.active;
+  saveUsersToDisk();
   addActivityLog("MODIFICACION", "UserManagement", `Estado de cuenta de usuario '${user.email}' cambiado a ${user.active ? 'ACTIVO' : 'DESACTIVO'}`);
   renderUsers();
 }
