@@ -93762,6 +93762,7 @@ async function handleForcePasswordChange(event) {
 }
 
 function completeLoginProcess(matchingUser) {
+  appState.realUserEmail = matchingUser.email;
   appState.currentUser = {
     id: matchingUser.id,
     name: `${matchingUser.firstName || ''} ${matchingUser.lastName || matchingUser.name || ''}`.trim(),
@@ -93778,21 +93779,7 @@ function completeLoginProcess(matchingUser) {
 
   appState.authenticated = true;
 
-  // Synchronize Header Role Switcher
-  const roleSelector = document.getElementById("roleSelector");
-  if (roleSelector) {
-    if (matchingUser.email === 'gerencia@softproductiva.com') {
-      roleSelector.value = 'SUPERUSER';
-    } else {
-      roleSelector.value = matchingUser.role;
-    }
-  }
-
-  const roleBadge = document.getElementById("currentRoleBadge");
-  if (roleBadge) {
-    roleBadge.textContent = (matchingUser.email === 'gerencia@softproductiva.com') ? '👑 SUPERUSUARIO' : matchingUser.role;
-    roleBadge.className = `role-badge ${matchingUser.role === 'ADMINISTRADOR' ? 'admin' : matchingUser.role === 'LOGISTICA' ? 'logistics' : 'sales'}`;
-  }
+  updateHeaderUserControls();
 
   addActivityLog("LOGIN", "SessionAuth", `Inicio de sesión exitoso con validación encriptada SHA-256 + Salt. Usuario: '${appState.currentUser.name}' (${appState.currentUser.email})`);
 
@@ -93804,6 +93791,7 @@ function handleLogout() {
   if (confirm("¿Está seguro de que desea cerrar la sesión activa?")) {
     addActivityLog("LOGOUT", "SessionAuth", `Cierre de sesión del usuario '${appState.currentUser.email}'.`);
     appState.authenticated = false;
+    appState.realUserEmail = null;
     
     const emailInput = document.getElementById("loginEmail");
     const passwordInput = document.getElementById("loginPassword");
@@ -93859,88 +93847,89 @@ function renderAllViews() {
 
 function updateHeaderUserControls() {
   if (!appState.currentUser) return;
-  const isSuperuser = (appState.currentUser.email === 'gerencia@softproductiva.com');
+
+  const realEmail = appState.realUserEmail || appState.currentUser.email;
+  const isRealSuperuser = (realEmail === 'gerencia@softproductiva.com');
 
   const roleContainer = document.querySelector(".role-switcher-container");
   const roleBadge = document.getElementById("currentRoleBadge");
   const roleSelect = document.getElementById("roleSelector");
 
-  // SUPERUSER PRIVACY & ACCESS CONTROL:
-  // The quick user switcher dropdown is ONLY visible to the Superusuario (gerencia@softproductiva.com).
-  // For any other user (Admin, Logística, Ventas), the dropdown switcher is completely hidden.
+  // ACCESS CONTROL RULE:
+  // The quick user switcher dropdown is STRICTLY visible to the Superusuario (gerencia@softproductiva.com).
+  // For any other user (Leyla Caterine, Admin, Logística, Ventas), the dropdown switcher is completely hidden.
   if (roleContainer) {
-    if (isSuperuser) {
+    if (isRealSuperuser) {
       roleContainer.style.display = "inline-flex";
     } else {
       roleContainer.style.display = "none";
     }
   }
 
+  // Populate dynamic options for Superusuario
+  if (roleSelect && isRealSuperuser) {
+    roleSelect.innerHTML = appState.users.map(u => {
+      const isSuper = (u.email === 'gerencia@softproductiva.com');
+      const label = isSuper 
+        ? `👑 Superusuario (${u.email})` 
+        : `👤 ${u.firstName || ''} ${u.lastName || u.name || ''}`.trim() + ` (${u.vinculacion || u.role})`;
+      const selected = (appState.currentUser && (appState.currentUser.id === u.id || appState.currentUser.email === u.email)) ? 'selected' : '';
+      return `<option value="${u.id}" ${selected}>${label}</option>`;
+    }).join('');
+  }
+
   if (roleBadge) {
-    if (isSuperuser) {
+    if (appState.currentUser.email === 'gerencia@softproductiva.com') {
       roleBadge.textContent = "👑 SUPERUSUARIO";
       roleBadge.className = "role-badge admin";
     } else {
-      roleBadge.textContent = appState.currentUser.role;
+      const isSuperposing = isRealSuperuser && (appState.currentUser.email !== 'gerencia@softproductiva.com');
+      roleBadge.textContent = isSuperposing ? `👑 ${appState.currentUser.role} (Superpuesto)` : appState.currentUser.role;
       roleBadge.className = `role-badge ${appState.currentUser.role === 'ADMINISTRADOR' ? 'admin' : appState.currentUser.role === 'LOGISTICA' ? 'logistics' : 'sales'}`;
     }
-  }
-
-  if (roleSelect && isSuperuser) {
-    roleSelect.value = "SUPERUSER";
   }
 }
 
 function initRoleSwitcher() {
   const roleSelect = document.getElementById("roleSelector");
-  const roleBadge = document.getElementById("currentRoleBadge");
   const rbacBanner = document.getElementById("rbacBanner");
   const activeRoleName = document.getElementById("activeRoleName");
 
   if (!roleSelect) return;
 
   roleSelect.addEventListener("change", (e) => {
-    // Only superuser is allowed to use this switcher
-    if (appState.currentUser.email !== 'gerencia@softproductiva.com') {
-      alert("🔒 Restricción de Privacidad: La conmutación rápida de usuarios está restringida al Superusuario.");
+    const realEmail = appState.realUserEmail || (appState.currentUser ? appState.currentUser.email : '');
+    
+    // Strict security check: Only real superuser is allowed to change user session
+    if (realEmail !== 'gerencia@softproductiva.com') {
+      alert("🔒 Restricción de Privacidad: La conmutación rápida de usuarios está restringida exclusivamente al Superusuario.");
       updateHeaderUserControls();
       return;
     }
 
-    const selectedKey = e.target.value;
-    let targetUser = null;
-
-    if (selectedKey === 'SUPERUSER') {
-      targetUser = appState.users.find(u => u.email === 'gerencia@softproductiva.com');
-    } else if (selectedKey === 'ADMINISTRADOR') {
-      targetUser = appState.users.find(u => u.email === 'admin@mascampo.co');
-    } else if (selectedKey === 'LOGISTICA') {
-      targetUser = appState.users.find(u => u.email === 'logistica@mascampo.co');
-    } else if (selectedKey === 'VENTAS') {
-      targetUser = appState.users.find(u => u.email === 'ventas@mascampo.co');
-    }
+    const selectedUserId = e.target.value;
+    const targetUser = appState.users.find(u => u.id === selectedUserId || u.email === selectedUserId);
 
     if (targetUser) {
       appState.currentUser = {
         id: targetUser.id,
-        name: `${targetUser.firstName} ${targetUser.lastName}`.trim(),
+        name: `${targetUser.firstName || ''} ${targetUser.lastName || targetUser.name || ''}`.trim(),
         firstName: targetUser.firstName,
         lastName: targetUser.lastName,
         document: targetUser.document,
         email: targetUser.email,
         role: targetUser.role,
+        vinculacion: targetUser.vinculacion,
         address: targetUser.address,
         phone: targetUser.phone,
         active: targetUser.active
       };
-    } else {
-      appState.currentUser.role = selectedKey;
+
+      addActivityLog("SUPERPOSICION_USUARIO", "SessionAuth", `Superusuario navegando ahora en perfil de '${targetUser.name}' (${targetUser.email})`);
     }
 
     const currentRole = appState.currentUser.role;
-    addActivityLog("LOGIN", "SessionAuth", `Cambio de sesión activa a Usuario: '${appState.currentUser.name}' (${appState.currentUser.email})`);
-
-    if (currentRole !== 'ADMINISTRADOR') {
+    if (currentRole !== 'ADMINISTRADOR' && currentRole !== 'SUPERADMINISTRADOR') {
       if (rbacBanner) rbacBanner.style.display = "block";
       if (activeRoleName) activeRoleName.textContent = currentRole;
     } else {
