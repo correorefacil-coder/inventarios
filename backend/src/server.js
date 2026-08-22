@@ -44,7 +44,7 @@ function appendAuditLogToFile(logEntry) {
 
 // In-Memory Database (Synced with Disk Logs)
 const db = {
-  roles: ['ADMINISTRADOR', 'LOGISTICA', 'VENTAS'],
+  roles: ['ADMINISTRADOR', 'SUPERADMINISTRADOR', 'LOGISTICA', 'VENTAS'],
   auditLogs: loadAuditLogsFromDisk(),
   products: [],
   movements: [],
@@ -72,9 +72,13 @@ function authMiddleware(req, res, next) {
 // RBAC Middleware Guard
 function rbacGuard(allowedRoles) {
   return (req, res, next) => {
-    if (!req.user || !allowedRoles.includes(req.user.role)) {
+    const userRole = req.user ? req.user.role : 'Desconocido';
+    const isAdminRole = userRole === 'ADMINISTRADOR' || userRole === 'SUPERADMINISTRADOR';
+    const isAllowed = allowedRoles.includes(userRole) || (allowedRoles.includes('ADMINISTRADOR') && isAdminRole);
+    
+    if (!req.user || !isAllowed) {
       return res.status(403).json({ 
-        error: `Acceso Denegado (RBAC): Su rol '${req.user ? req.user.role : 'Desconocido'}' no tiene permisos para esta acción.` 
+        error: `Acceso Denegado (RBAC): Su rol '${userRole}' no tiene permisos para esta acción.` 
       });
     }
     next();
@@ -108,8 +112,9 @@ app.post('/api/auth/login', (req, res) => {
   
   // Mock login check
   let role = 'ADMINISTRADOR';
-  if (email.includes('logistica')) role = 'LOGISTICA';
-  if (email.includes('ventas')) role = 'VENTAS';
+  if (email.includes('superadmin') || email.includes('gerencia')) role = 'SUPERADMINISTRADOR';
+  else if (email.includes('logistica')) role = 'LOGISTICA';
+  else if (email.includes('ventas')) role = 'VENTAS';
 
   const user = { id: 'usr-101', name: 'Carlos Mendoza', email, role };
   const token = jwt.sign(user, JWT_SECRET, { expiresIn: '8h' });
@@ -120,10 +125,11 @@ app.post('/api/auth/login', (req, res) => {
 // 2. Products Catalog (RBAC Sensitive: BaseCost masked for non-Admins)
 app.get('/api/products', authMiddleware, (req, res) => {
   const userRole = req.user.role;
+  const isAdmin = userRole === 'ADMINISTRADOR' || userRole === 'SUPERADMINISTRADOR';
 
   // Filter financial details if not Admin
   const safeProducts = db.products.map(p => {
-    if (userRole !== 'ADMINISTRADOR') {
+    if (!isAdmin) {
       const { baseCost, ...safeProduct } = p;
       return safeProduct;
     }
@@ -134,10 +140,27 @@ app.get('/api/products', authMiddleware, (req, res) => {
 });
 
 // 3. Create Product (Admin Only)
-app.post('/api/products', authMiddleware, rbacGuard(['ADMINISTRADOR']), auditMiddleware('CREATE', 'Product'), (req, res) => {
-  const newProduct = { id: `prod-${Date.now()}`, ...req.body, physicalStock: 0, reservedStock: 0 };
+app.post('/api/products', authMiddleware, rbacGuard(['ADMINISTRADOR', 'SUPERADMINISTRADOR']), auditMiddleware('CREATE', 'Product'), (req, res) => {
+  const newProduct = { id: `prod-${Date.now()}`, ...req.body, physicalStock: req.body.physicalStock || 0, reservedStock: req.body.reservedStock || 0 };
   db.products.push(newProduct);
   res.status(201).json(newProduct);
+});
+
+// 3b. Update Product & Inventory Values (Admin & Superadmin Only)
+app.put('/api/products/:id', authMiddleware, rbacGuard(['ADMINISTRADOR', 'SUPERADMINISTRADOR']), auditMiddleware('UPDATE', 'Product'), (req, res) => {
+  const { id } = req.params;
+  const index = db.products.findIndex(p => p.id === id);
+  if (index === -1) {
+    return res.status(404).json({ error: 'Producto no encontrado' });
+  }
+
+  db.products[index] = {
+    ...db.products[index],
+    ...req.body,
+    updatedAt: new Date().toISOString()
+  };
+
+  res.json({ message: 'Producto e inventario actualizado exitosamente', product: db.products[index] });
 });
 
 // 4. Linear Regression Projections Endpoint

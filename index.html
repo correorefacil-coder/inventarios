@@ -329,7 +329,7 @@
                     <th class="cost-column">Costo Base</th>
                     <th class="cost-column">Precio Venta</th>
                     <th>Disponible</th>
-                    <th>Inspeccionar</th>
+                    <th>Acciones / Gestión</th>
                   </tr>
                 </thead>
                 <tbody id="catalogTableBody">
@@ -1205,6 +1205,113 @@
       </div>
     </div>
 
+    <!-- Product & Inventory Editing Modal (Admin & Superadmin Only) -->
+    <div id="editProductModal" class="modal-overlay">
+      <div class="modal-content" style="max-width: 650px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--accent-green);">✏️ Editar Información y Valores de Inventario</h3>
+          <button class="btn btn-secondary" onclick="closeEditProductModal()" style="padding: 0.2rem 0.6rem;">✕</button>
+        </div>
+
+        <form id="editProductForm" onsubmit="handleUpdateProduct(event)">
+          <input type="hidden" id="editProductId">
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">SKU / Código Interno *</label>
+              <input type="text" id="editSku" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Nombre del Producto *</label>
+              <input type="text" id="editName" class="form-control" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Descripción / Detalles *</label>
+            <input type="text" id="editDescription" class="form-control" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Categoría *</label>
+              <select id="editCategory" class="form-control" required>
+                <!-- JS -->
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Unidad de Venta *</label>
+              <select id="editUnit" class="form-control" required>
+                <option value="UNIDAD">Unidad</option>
+                <option value="CAJA">Caja</option>
+                <option value="PAQUETE">Paquete</option>
+                <option value="PAQUETE X 5 UND">Paquete x 5 Und</option>
+                <option value="PAQUETE X 25 UND">Paquete x 25 Und</option>
+                <option value="PAQUETE X 50 UND">Paquete x 50 Und</option>
+                <option value="PAQUETE X 100 UND">Paquete x 100 Und</option>
+                <option value="ROLLO X 80 UND">Rollo x 80 Und</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Costo Base ($) *</label>
+              <input type="number" id="editBaseCost" class="form-control" step="0.01" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Precio de Venta ($) *</label>
+              <input type="number" id="editSalePrice" class="form-control" step="0.01" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Stock Físico Total *</label>
+              <input type="number" id="editPhysicalStock" class="form-control" min="0" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Stock Reservado / Bloqueado *</label>
+              <input type="number" id="editReservedStock" class="form-control" min="0" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Stock Mínimo Alerta *</label>
+              <input type="number" id="editMinStock" class="form-control" min="0" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Garantía (Meses) *</label>
+              <input type="number" id="editWarrantyMonths" class="form-control" min="0" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Requiere Número de Serie *</label>
+            <select id="editReqSerial" class="form-control" required>
+              <option value="true">Sí (Equipo Serializado)</option>
+              <option value="false">No (Manejo por Cantidad)</option>
+            </select>
+          </div>
+
+          <!-- Stock por Sede -->
+          <div style="background: rgba(15, 23, 42, 0.6); padding: 0.8rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-top: 0.5rem;">
+            <label class="form-label" style="color: var(--accent-teal); font-weight: 700; margin-bottom: 0.5rem; display: block;">
+              📍 Distribución del Inventario por Sede (Bodegas)
+            </label>
+            <div id="editProductStockByLocationContainer">
+              <!-- JS Populated Inputs -->
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1.2rem; background: var(--accent-green);">
+            💾 Guardar Cambios en Producto e Inventario
+          </button>
+        </form>
+      </div>
+    </div>
+
     <!-- User Creation / Editing Modal (Admin Only) -->
     <div id="userModal" class="modal-overlay">
       <div class="modal-content" style="max-width: 550px;">
@@ -1268,6 +1375,7 @@
             <div class="form-group">
               <label class="form-label">Rol de Acceso (RBAC) *</label>
               <select id="userRole" class="form-control" required>
+                <option value="SUPERADMINISTRADOR">SUPERADMINISTRADOR (Acceso Total y Permisos Avanzados)</option>
                 <option value="ADMINISTRADOR">ADMINISTRADOR (Acceso Total Financiero/Config)</option>
                 <option value="LOGISTICA">LOGISTICA (Bodega / Entradas / Salidas)</option>
                 <option value="VENTAS">VENTAS (Consulta Stock / Reservas)</option>

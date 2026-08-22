@@ -9,6 +9,7 @@ generator client {
 
 enum RoleName {
   ADMINISTRADOR
+  SUPERADMINISTRADOR
   LOGISTICA
   VENTAS
 }
