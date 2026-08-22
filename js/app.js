@@ -94078,6 +94078,25 @@ function renderCustomers() {
     return matchesType && matchesSearch;
   });
 
+  // Update live dynamic counter badge bar for Customers
+  const counterContainer = document.getElementById("customersCounterBadge");
+  if (counterContainer) {
+    const nitCount = filtered.filter(c => c.documentType === 'NIT').length;
+    const cedulaCount = filtered.filter(c => c.documentType !== 'NIT').length;
+
+    counterContainer.innerHTML = `
+      <span class="badge badge-purple" style="font-size: 0.82rem; padding: 0.35rem 0.65rem;">
+        👥 Mostrando: <strong>${filtered.length.toLocaleString('es-CO')}</strong> de ${appState.customers.length.toLocaleString('es-CO')} clientes
+      </span>
+      <span class="badge badge-blue" style="font-size: 0.82rem; padding: 0.35rem 0.65rem;">
+        🏢 NITs (Empresas): <strong>${nitCount.toLocaleString('es-CO')}</strong>
+      </span>
+      <span class="badge badge-amber" style="font-size: 0.82rem; padding: 0.35rem 0.65rem;">
+        👤 Cédulas (Personas Naturales): <strong>${cedulaCount.toLocaleString('es-CO')}</strong>
+      </span>
+    `;
+  }
+
   tableBody.innerHTML = filtered.map(c => {
     const formattedDoc = c.documentType === 'NIT' ? `NIT <strong>${c.documentNumber}</strong>-${c.verificationDigit || '0'}` : `CC <strong>${c.documentNumber}</strong>`;
     
@@ -95125,6 +95144,32 @@ function renderCatalog() {
 
     return matchesSearch && matchesCategory && matchesLocation;
   });
+
+  // Update live dynamic counter badge bar
+  const counterContainer = document.getElementById("catalogCounterBadge");
+  if (counterContainer) {
+    const totalPhysicalStock = filtered.reduce((sum, p) => sum + (p.physicalStock || 0), 0);
+    const totalCostVal = filtered.reduce((sum, p) => sum + ((p.physicalStock || 0) * (p.baseCost || 0)), 0);
+    const totalSaleVal = filtered.reduce((sum, p) => sum + ((p.physicalStock || 0) * (p.salePrice || 0)), 0);
+    const isAdmin = isAdminUser(appState.currentUser);
+
+    counterContainer.innerHTML = `
+      <span class="badge badge-green" style="font-size: 0.82rem; padding: 0.35rem 0.65rem;">
+        📊 Mostrando: <strong>${filtered.length.toLocaleString('es-CO')}</strong> de ${appState.products.length.toLocaleString('es-CO')} productos
+      </span>
+      <span class="badge badge-blue" style="font-size: 0.82rem; padding: 0.35rem 0.65rem;">
+        📦 Existencias Totales: <strong>${totalPhysicalStock.toLocaleString('es-CO')}</strong> unidades
+      </span>
+      ${isAdmin ? `
+        <span class="badge badge-purple" style="font-size: 0.82rem; padding: 0.35rem 0.65rem;">
+          💰 Valor Total (Costo): <strong>$${totalCostVal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
+        </span>
+        <span class="badge badge-amber" style="font-size: 0.82rem; padding: 0.35rem 0.65rem;">
+          🏷️ Valor Estimado Venta: <strong>$${totalSaleVal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
+        </span>
+      ` : ''}
+    `;
+  }
 
   tableBody.innerHTML = filtered.map(p => {
     const availableStock = p.physicalStock - p.reservedStock;
