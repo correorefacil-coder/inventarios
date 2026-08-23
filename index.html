@@ -103,6 +103,9 @@
         <a class="drawer-nav-link active" data-view="view-dashboard" onclick="switchViewFromDrawer('view-dashboard')">
           <span class="icon">📊</span> Dashboard & KPIs
         </a>
+        <a class="drawer-nav-link admin-only" id="mobileDrawerSigoLink" onclick="triggerSigoReportImport(); closeMobileDrawer();" title="Cargar Cierre de Ventas Sigo (Auto)">
+          <span class="icon">⚡</span> <span>Cargar Cierre Ventas Sigo</span>
+        </a>
         <a class="drawer-nav-link" data-view="view-catalog" onclick="switchViewFromDrawer('view-catalog')">
           <span class="icon">📦</span> Catálogo & Categorías
         </a>
@@ -161,52 +164,77 @@
         </div>
       </div>
 
-      <!-- Sigo Auto Import, Excel Import, Theme Switcher & RBAC Role Selector -->
-      <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
-        <input type="file" id="sigoReportFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleSigoReportUpload(event)">
-        
-        <button class="btn btn-primary" id="btnUploadSigoSales" onclick="triggerSigoReportImport()" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">
-          <span>⚡</span> Cargar Cierre Ventas Sigo (Auto)
+    <!-- Header Navigation (Clean Hostinger Style) -->
+    <header class="app-header">
+      <div class="brand-container">
+        <button id="mobileMenuBtn" class="mobile-menu-trigger" onclick="toggleSidebarOrDrawer()" title="Plegar / Desplegar Menú de Navegación">
+          ☰
         </button>
-
-        <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleExcelUpload(event)">
-        <button class="btn btn-secondary" onclick="document.getElementById('excelFileInput').click()" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">
-          <span>📥</span> Importar Excel 2026
-        </button>
-
-        <!-- Theme Switcher Container -->
-        <div class="theme-switcher-container">
-          <span class="theme-badge" id="currentThemeBadgeIcon">🌙</span>
-          <select id="themeSelector" class="role-select" title="Seleccionar Tema de Apariencia" onchange="handleThemeChange(this.value)">
-            <option value="dark">🌙 Tema Oscuro</option>
-            <option value="light">☀️ Tema Claro</option>
-            <option value="navy">🌊 Azul Marino</option>
-            <option value="emerald">🌿 Esmeralda</option>
-            <option value="custom">🎨 Personalizado...</option>
-          </select>
-          <button class="btn-theme-custom" onclick="openThemeCustomizerModal()" title="Personalizar Colores del Tema">
-            ⚙️
-          </button>
+        <div class="brand-logo" style="background: #10b981; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white;">MC</div>
+        <div>
+          <h1 class="brand-title">MÁS CAMPO</h1>
+          <div class="brand-subtitle">Biotecnología Animal • Inventario Centralizado</div>
         </div>
+      </div>
 
-        <!-- Role & User Switcher Container -->
-        <div class="role-switcher-container">
-          <span class="role-badge admin" id="currentRoleBadge">ADMINISTRADOR</span>
-          <select id="roleSelector" class="role-select" title="Cambiar Usuario / Rol de Sesión (RBAC)">
-            <option value="ADMINISTRADOR">Leyla Caterine Bernal (Gerente General)</option>
-            <option value="SUPERUSER">👑 Superusuario (gerencia@softproductiva.com)</option>
-          </select>
+      <!-- Hidden File Input for Sigo Auto Import -->
+      <input type="file" id="sigoReportFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleSigoReportUpload(event)">
+
+      <!-- Top Right User Profile Dropdown Trigger (Hostinger Style) -->
+      <div class="user-profile-menu-container">
+        <button id="userProfileDropdownBtn" class="user-profile-btn" onclick="toggleUserProfileDropdown(event)">
+          <span class="user-avatar-circle">👤</span>
+          <span class="user-display-name" id="headerUserDisplayName">Superusuario</span>
+          <span class="dropdown-chevron">▾</span>
+        </button>
+
+        <!-- User Dropdown Menu Card -->
+        <div id="userProfileDropdownMenu" class="user-profile-dropdown-card">
+          <div class="dropdown-user-header">
+            <div style="font-weight: 700; font-size: 0.9rem; color: var(--text-main);" id="dropdownCardUserName">Superusuario</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);" id="dropdownCardUserEmail">gerencia@softproductiva.com</div>
+            <span class="role-badge admin" id="currentRoleBadge" style="margin-top: 0.4rem; display: inline-block;">ADMINISTRADOR</span>
+          </div>
+
+          <div class="dropdown-section">
+            <button class="dropdown-item" onclick="openProfileModal(); closeUserProfileDropdown();">
+              <span class="icon">👤</span> Mi Perfil & Seguridad
+            </button>
+          </div>
+
+          <div class="dropdown-section">
+            <div class="dropdown-section-title">🎨 Tema de Apariencia</div>
+            <div style="display: flex; gap: 0.4rem; align-items: center; padding: 0.4rem 0.75rem;">
+              <span id="currentThemeBadgeIcon">🌙</span>
+              <select id="themeSelector" class="role-select" style="flex: 1; padding: 0.35rem 0.5rem; font-size: 0.82rem;" onchange="handleThemeChange(this.value)">
+                <option value="dark">🌙 Tema Oscuro</option>
+                <option value="light">☀️ Tema Claro</option>
+                <option value="navy">🌊 Azul Marino</option>
+                <option value="emerald">🌿 Esmeralda</option>
+                <option value="custom">🎨 Personalizado...</option>
+              </select>
+              <button class="btn-theme-custom" onclick="openThemeCustomizerModal(); closeUserProfileDropdown();" title="Personalizar Colores">
+                ⚙️
+              </button>
+            </div>
+          </div>
+
+          <div class="dropdown-section">
+            <div class="dropdown-section-title">👑 Rol de Sesión (RBAC)</div>
+            <div style="padding: 0.4rem 0.75rem;">
+              <select id="roleSelector" class="role-select" style="width: 100%; padding: 0.35rem 0.5rem; font-size: 0.82rem;" title="Cambiar Usuario / Rol de Sesión">
+                <option value="ADMINISTRADOR">Leyla Caterine Bernal (Gerente General)</option>
+                <option value="SUPERUSER">👑 Superusuario (gerencia@softproductiva.com)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="dropdown-section" style="border-bottom: none;">
+            <button class="dropdown-item logout" onclick="handleLogout(); closeUserProfileDropdown();">
+              <span class="icon">🚪</span> Cerrar Sesión
+            </button>
+          </div>
         </div>
-
-        <!-- User Self-Service Profile Button -->
-        <button class="btn btn-secondary" onclick="openProfileModal()" style="padding: 0.35rem 0.65rem; font-size: 0.8rem;" title="Editar Mi Perfil (Contraseña, Dirección, Teléfono)">
-          👤 Mi Perfil
-        </button>
-
-        <!-- Logout Button -->
-        <button class="btn btn-secondary" onclick="handleLogout()" style="padding: 0.35rem 0.65rem; font-size: 0.8rem; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;" title="Cerrar Sesión Actual">
-          🚪 Cerrar Sesión
-        </button>
       </div>
     </header>
 
@@ -215,40 +243,43 @@
       <!-- Desktop Sidebar -->
       <aside class="sidebar">
         <a class="nav-link active" data-view="view-dashboard">
-          <span class="icon">📊</span> Dashboard & KPIs
+          <span class="icon">📊</span> <span>Dashboard & KPIs</span>
+        </a>
+        <a class="nav-link admin-only" id="sidebarSigoLink" onclick="triggerSigoReportImport();" title="Cargar Cierre de Ventas Sigo (Auto)">
+          <span class="icon">⚡</span> <span>Cargar Cierre Ventas Sigo</span>
         </a>
         <a class="nav-link" data-view="view-catalog">
-          <span class="icon">📦</span> Catálogo & Categorías
+          <span class="icon">📦</span> <span>Catálogo & Categorías</span>
         </a>
         <a class="nav-link" data-view="view-locations">
-          <span class="icon">📍</span> Ubicaciones & Traslados
+          <span class="icon">📍</span> <span>Ubicaciones & Traslados</span>
         </a>
         <a class="nav-link" data-view="view-pending-validations">
-          <span class="icon">📋</span> Validaciones Pendientes <span id="pendingValidationBadge" class="badge badge-amber" style="margin-left: 0.3rem; display: none;">0</span>
+          <span class="icon">📋</span> <span>Validaciones Pendientes</span> <span id="pendingValidationBadge" class="badge badge-amber" style="margin-left: 0.3rem; display: none;">0</span>
         </a>
         <a class="nav-link" data-view="view-kardex">
-          <span class="icon">🔄</span> Kardex & Soportes
+          <span class="icon">🔄</span> <span>Kardex & Soportes</span>
         </a>
         <a class="nav-link" data-view="view-equipment">
-          <span class="icon">🩺</span> Hoja de Vida & Garantías
+          <span class="icon">🩺</span> <span>Hoja de Vida & Garantías</span>
         </a>
         <a class="nav-link" data-view="view-customers-analytics">
-          <span class="icon">👤</span> Clientes & Analítica 360°
+          <span class="icon">👤</span> <span>Clientes & Analítica 360°</span>
         </a>
         <a class="nav-link" data-view="view-reservations">
-          <span class="icon">🔒</span> Reservas & Bloqueos
+          <span class="icon">🔒</span> <span>Reservas & Bloqueos</span>
         </a>
         <a class="nav-link" data-view="view-users">
-          <span class="icon">👥</span> Usuarios & Roles
+          <span class="icon">👥</span> <span>Usuarios & Roles</span>
         </a>
         <a class="nav-link" data-view="view-audit-logs">
-          <span class="icon">🛡️</span> Log Actividad & IP (Admin)
+          <span class="icon">🛡️</span> <span>Log Actividad & IP</span>
         </a>
         <a class="nav-link" data-view="view-forecasting">
-          <span class="icon">📈</span> Alertas & Regresión
+          <span class="icon">📈</span> <span>Alertas & Regresión</span>
         </a>
         <a class="nav-link" data-view="view-reports">
-          <span class="icon">📄</span> Exportar Sigo & Reportes
+          <span class="icon">📄</span> <span>Exportar Sigo & Reportes</span>
         </a>
       </aside>
 

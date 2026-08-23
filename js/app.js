@@ -93461,6 +93461,54 @@ function switchViewFromDrawer(viewId) {
   closeMobileDrawer();
 }
 
+// USER PROFILE DROPDOWN MENU CONTROLLER
+function toggleUserProfileDropdown(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById("userProfileDropdownMenu");
+  if (menu) {
+    const isActive = menu.classList.contains("active");
+    if (isActive) {
+      closeUserProfileDropdown();
+    } else {
+      openUserProfileDropdown();
+    }
+  }
+}
+
+function openUserProfileDropdown() {
+  const menu = document.getElementById("userProfileDropdownMenu");
+  if (menu) {
+    menu.classList.add("active");
+
+    // Update user info labels
+    const nameLabel = document.getElementById("headerUserDisplayName");
+    const cardName = document.getElementById("dropdownCardUserName");
+    const cardEmail = document.getElementById("dropdownCardUserEmail");
+    
+    if (appState.currentUser) {
+      const displayName = appState.currentUser.name || appState.currentUser.email || "Usuario";
+      if (nameLabel) nameLabel.textContent = displayName.split(" ")[0];
+      if (cardName) cardName.textContent = displayName;
+      if (cardEmail) cardEmail.textContent = appState.currentUser.email || "";
+    }
+  }
+}
+
+function closeUserProfileDropdown() {
+  const menu = document.getElementById("userProfileDropdownMenu");
+  if (menu) {
+    menu.classList.remove("active");
+  }
+}
+
+// Close dropdown on outside click
+document.addEventListener("click", (e) => {
+  const container = document.querySelector(".user-profile-menu-container");
+  if (container && !container.contains(e.target)) {
+    closeUserProfileDropdown();
+  }
+});
+
 // ==========================================================================
 // THEME MANAGEMENT & CUSTOMIZER SYSTEM
 // ==========================================================================
