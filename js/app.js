@@ -93183,9 +93183,7 @@ const appState = {
 
   movements: [],
 
-  reservations: [
-    { id: "res-101", customerId: "cust-1", productId: "prod-1", quantity: 150, reason: "Apartado jornadas de biotecnología llanos", status: "ACTIVA", date: "2026-01-25" }
-  ],
+  reservations: [],
 
   auditLogs: initialAuditLogs
 };
