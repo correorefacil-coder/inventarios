@@ -921,10 +921,13 @@
                 <label class="form-label" for="customerTypeFilter">Tipo de Documento</label>
                 <select id="customerTypeFilter" class="form-control" onchange="renderCustomers()">
                   <option value="ALL">Todos los Tipos</option>
-                  <option value="NIT">NIT (Nacional)</option>
-                  <option value="NIT-E">NIT-E (Extranjero)</option>
-                  <option value="CC">CC (Cédula Ciudadanía)</option>
-                  <option value="CC-E">CC-E (Cédula / Doc Extranjero)</option>
+                  <option value="NIT">NIT (Persona Jurídica / Fiscal)</option>
+                  <option value="NIT-E">NIT-E (NIT de Extranjero)</option>
+                  <option value="CC">CC (Cédula de Ciudadanía)</option>
+                  <option value="CC-E">CC-E (Cédula de Extranjero)</option>
+                  <option value="CE">CE (Cédula de Extranjería)</option>
+                  <option value="PP">PP (Pasaporte)</option>
+                  <option value="PEP">PEP / PPT (Permiso Especial / Protec. Temp.)</option>
                 </select>
               </div>
 
@@ -1776,10 +1779,13 @@
             <div class="form-group">
               <label class="form-label">Tipo de Documento *</label>
               <select id="customerModalDocType" class="form-control" required onchange="toggleCustomerDVField()">
-                <option value="NIT">NIT (Nacional)</option>
-                <option value="NIT-E">NIT-E (Extranjero)</option>
+                <option value="NIT">NIT (Número Identificación Tributaria)</option>
+                <option value="NIT-E">NIT-E (NIT de Extranjero)</option>
                 <option value="CC">CC (Cédula de Ciudadanía)</option>
-                <option value="CC-E">CC-E (Cédula / Doc Extranjero)</option>
+                <option value="CC-E">CC-E (Cédula de Extranjero)</option>
+                <option value="CE">CE (Cédula de Extranjería)</option>
+                <option value="PP">PP (Pasaporte)</option>
+                <option value="PEP">PEP / PPT (Permiso Especial / Protec. Temp.)</option>
               </select>
             </div>
             <div class="form-group" style="flex: 2;">

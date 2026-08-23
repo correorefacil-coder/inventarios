@@ -94400,17 +94400,28 @@ function renderAllViews() {
 
 // 1. CUSTOMER DIRECTORY & 360° ANALYTICS ENGINE
 function getCustomerBadgeHtml(docType = '') {
-  const dt = (docType || '').trim().toLowerCase();
-  if (dt === 'nit') {
+  const dt = (docType || '').trim().toUpperCase();
+  const dtLower = (docType || '').trim().toLowerCase();
+
+  if (dt === 'NIT') {
     return `<span class="badge badge-purple" style="font-size: 0.72rem; padding: 0.15rem 0.4rem;">NIT</span>`;
   }
-  if (dt.includes('otro país') || dt.includes('exterior') || dt === 'nit-e') {
+  if (dt === 'NIT-E' || dtLower.includes('otro país') || dtLower.includes('exterior')) {
     return `<span class="badge badge-purple" style="font-size: 0.72rem; padding: 0.15rem 0.4rem;">NIT-E</span>`;
   }
-  if (dt.includes('extranjer') || dt === 'cc-e' || dt === 'ce') {
+  if (dt === 'CC-E' || dtLower.includes('identificación extranjero')) {
     return `<span class="badge badge-amber" style="font-size: 0.72rem; padding: 0.15rem 0.4rem;">CC-E</span>`;
   }
-  if (dt.includes('ciudadanía') || dt === 'cc') {
+  if (dt === 'CE' || dtLower.includes('cédula de extranjería')) {
+    return `<span class="badge badge-amber" style="font-size: 0.72rem; padding: 0.15rem 0.4rem;">CE</span>`;
+  }
+  if (dt === 'PP' || dtLower.includes('pasaporte')) {
+    return `<span class="badge badge-blue" style="font-size: 0.72rem; padding: 0.15rem 0.4rem;">PP</span>`;
+  }
+  if (dt === 'PEP' || dt === 'PPT' || dtLower.includes('permiso') || dtLower.includes('protección')) {
+    return `<span class="badge badge-blue" style="font-size: 0.72rem; padding: 0.15rem 0.4rem;">PEP/PPT</span>`;
+  }
+  if (dt === 'CC' || dtLower.includes('ciudadanía')) {
     return `<span class="badge badge-blue" style="font-size: 0.72rem; padding: 0.15rem 0.4rem;">CC</span>`;
   }
   return `<span class="badge badge-blue" style="font-size: 0.72rem; padding: 0.15rem 0.4rem;">${docType || 'CC'}</span>`;
@@ -94418,7 +94429,7 @@ function getCustomerBadgeHtml(docType = '') {
 
 function getCleanCustomerDocNumber(c) {
   let num = (c.rawDoc || c.documentNumber || '').trim();
-  num = num.replace(/^(NIT|CC|CE)\s*/i, '').trim();
+  num = num.replace(/^(NIT|CC|CE|PP|PEP|PPT)\s*/i, '').trim();
   if (!num.includes('-') && c.verificationDigit && (c.documentType === 'NIT' || c.documentType === 'NIT-E')) {
     return `${num}-${c.verificationDigit}`;
   }
@@ -94433,17 +94444,26 @@ function renderCustomers() {
   if (!tableBody) return;
 
   const filtered = appState.customers.filter(c => {
-    const dt = (c.documentType || '').toLowerCase();
+    const dtUpper = (c.documentType || '').trim().toUpperCase();
+    const dtLower = (c.documentType || '').trim().toLowerCase();
     let matchesType = true;
+
     if (typeFilter === "NIT") {
       matchesType = (c.documentType === "NIT");
     } else if (typeFilter === "NIT-E") {
-      matchesType = (dt.includes('otro país') || dt.includes('exterior') || dt === 'nit-e');
+      matchesType = (dtUpper === 'NIT-E' || dtLower.includes('otro país') || dtLower.includes('exterior'));
     } else if (typeFilter === "CC") {
-      matchesType = (dt.includes('ciudadanía') || dt === 'cc');
+      matchesType = (dtUpper === 'CC' || dtLower.includes('ciudadanía'));
     } else if (typeFilter === "CC-E") {
-      matchesType = (dt.includes('extranjer') || dt === 'cc-e' || dt === 'ce');
+      matchesType = (dtUpper === 'CC-E' || dtLower.includes('identificación extranjero'));
+    } else if (typeFilter === "CE") {
+      matchesType = (dtUpper === 'CE' || dtLower.includes('cédula de extranjería'));
+    } else if (typeFilter === "PP") {
+      matchesType = (dtUpper === 'PP' || dtLower.includes('pasaporte'));
+    } else if (typeFilter === "PEP") {
+      matchesType = (dtUpper === 'PEP' || dtUpper === 'PPT' || dtLower.includes('permiso') || dtLower.includes('protección'));
     }
+
     const matchesSearch = c.name.toLowerCase().includes(searchQuery) ||
                           (c.documentNumber && c.documentNumber.includes(searchQuery)) ||
                           (c.rawDoc && c.rawDoc.includes(searchQuery)) ||
@@ -94462,9 +94482,21 @@ function renderCustomers() {
     }).length;
     const cceCount = filtered.filter(c => {
       const dt = (c.documentType || '').toLowerCase();
-      return dt.includes('extranjer') || dt === 'cc-e' || dt === 'ce';
+      return dt.includes('identificación extranjero') || dt === 'cc-e';
     }).length;
-    const ccCount = filtered.length - (nitCount + niteCount + cceCount);
+    const ceCount = filtered.filter(c => {
+      const dt = (c.documentType || '').toLowerCase();
+      return dt.includes('cédula de extranjería') || dt === 'ce';
+    }).length;
+    const ppCount = filtered.filter(c => {
+      const dt = (c.documentType || '').toLowerCase();
+      return dt.includes('pasaporte') || dt === 'pp';
+    }).length;
+    const pepCount = filtered.filter(c => {
+      const dt = (c.documentType || '').toLowerCase();
+      return dt.includes('permiso') || dt.includes('protección') || dt === 'pep' || dt === 'ppt';
+    }).length;
+    const ccCount = filtered.length - (nitCount + niteCount + cceCount + ceCount + ppCount + pepCount);
 
     counterContainer.innerHTML = `
       <span class="badge badge-purple" style="font-size: 0.76rem; padding: 0.2rem 0.45rem;">
@@ -94482,6 +94514,9 @@ function renderCustomers() {
       <span class="badge badge-amber" style="font-size: 0.76rem; padding: 0.2rem 0.45rem;">
         ✈️ CC-E: <strong>${cceCount.toLocaleString('es-CO')}</strong>
       </span>
+      ${ceCount > 0 ? `<span class="badge badge-amber" style="font-size: 0.76rem; padding: 0.2rem 0.45rem;">🪪 CE: <strong>${ceCount.toLocaleString('es-CO')}</strong></span>` : ''}
+      ${ppCount > 0 ? `<span class="badge badge-blue" style="font-size: 0.76rem; padding: 0.2rem 0.45rem;">📘 PP: <strong>${ppCount.toLocaleString('es-CO')}</strong></span>` : ''}
+      ${pepCount > 0 ? `<span class="badge badge-blue" style="font-size: 0.76rem; padding: 0.2rem 0.45rem;">📑 PEP/PPT: <strong>${pepCount.toLocaleString('es-CO')}</strong></span>` : ''}
     `;
   }
 
@@ -94535,15 +94570,19 @@ function openCustomerModal(customerId = null) {
     if (title) title.textContent = `✏️ Editar Cliente / Proveedor (${c.name})`;
     if (editIdInput) editIdInput.value = c.id;
 
+    const dtUpper = (c.documentType || '').trim().toUpperCase();
     const dt = (c.documentType || '').toLowerCase();
     let selType = "CC";
-    if (c.documentType === "NIT") selType = "NIT";
-    else if (dt.includes("otro país") || dt.includes("exterior") || dt === "nit-e") selType = "NIT-E";
-    else if (dt.includes("extranjer") || dt === "cc-e" || dt === "ce") selType = "CC-E";
-    else if (dt.includes("ciudadanía") || dt === "cc") selType = "CC";
+    if (dtUpper === "NIT" || dt === "nit") selType = "NIT";
+    else if (dtUpper === "NIT-E" || dt.includes("otro país") || dt.includes("exterior")) selType = "NIT-E";
+    else if (dtUpper === "CC-E" || dt.includes("identificación extranjero")) selType = "CC-E";
+    else if (dtUpper === "CE" || dt.includes("cédula de extranjería")) selType = "CE";
+    else if (dtUpper === "PP" || dt.includes("pasaporte")) selType = "PP";
+    else if (dtUpper === "PEP" || dtUpper === "PPT" || dt.includes("permiso") || dt.includes("protección")) selType = "PEP";
+    else if (dtUpper === "CC" || dt.includes("ciudadanía")) selType = "CC";
 
     document.getElementById("customerModalDocType").value = selType;
-    document.getElementById("customerModalDocNum").value = (c.documentNumber || c.rawDoc || '').replace(/^(NIT|CC|CE)\s*/i, '').split('-')[0];
+    document.getElementById("customerModalDocNum").value = (c.documentNumber || c.rawDoc || '').replace(/^(NIT|CC|CE|PP|PEP|PPT)\s*/i, '').split('-')[0];
     document.getElementById("customerModalDV").value = c.verificationDigit || '';
     document.getElementById("customerModalName").value = c.name || '';
     document.getElementById("customerModalCity").value = c.city || '';
@@ -94598,9 +94637,12 @@ function handleSaveCustomer(event) {
 
   let docTypeFull = docTypeVal;
   if (docTypeVal === "NIT") docTypeFull = "NIT";
-  else if (docTypeVal === "NIT-E") docTypeFull = "Nit de otro país / Sin identificación del exterior (43 medios magnéticos)";
-  else if (docTypeVal === "CC") docTypeFull = "Cédula de ciudadanía";
-  else if (docTypeVal === "CC-E") docTypeFull = "Cédula de extranjería";
+  else if (docTypeVal === "NIT-E") docTypeFull = "NIT-E";
+  else if (docTypeVal === "CC") docTypeFull = "CC";
+  else if (docTypeVal === "CC-E") docTypeFull = "CC-E";
+  else if (docTypeVal === "CE") docTypeFull = "CE";
+  else if (docTypeVal === "PP") docTypeFull = "PP";
+  else if (docTypeVal === "PEP") docTypeFull = "PEP / PPT";
 
   const rawFormattedDoc = (docTypeVal === "NIT" || docTypeVal === "NIT-E") && dvVal ? `${docNumVal}-${dvVal}` : docNumVal;
 
