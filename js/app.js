@@ -93670,12 +93670,131 @@ function resetThemeToDefault() {
   alert("🔄 Tema restablecido al Modo Oscuro por defecto.");
 }
 
+// SESSION PERSISTENCE & INACTIVITY ENGINE (10 MIN TIMEOUT WITH 1 MIN WARNING)
+const SESSION_STORAGE_KEY = "mascampo_active_session_v1";
+const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+const WARNING_TIMEOUT_MS = 9 * 60 * 1000;   // 9 minutes
+
+let inactivityTimer = null;
+let warningTimer = null;
+let countdownInterval = null;
+
+function saveSessionToStorage() {
+  if (appState.authenticated && appState.currentUser) {
+    const sessionData = {
+      user: appState.currentUser,
+      realUserEmail: appState.realUserEmail,
+      timestamp: Date.now()
+    };
+    try {
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+    } catch (e) {}
+  }
+}
+
+function loadSessionFromStorage() {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.user && parsed.user.email) {
+        appState.authenticated = true;
+        appState.currentUser = parsed.user;
+        appState.realUserEmail = parsed.realUserEmail || parsed.user.email;
+        updateHeaderUserControls();
+        return true;
+      }
+    }
+  } catch (e) {}
+  return false;
+}
+
+function clearSessionFromStorage() {
+  try {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+  } catch (e) {}
+}
+
+function resetInactivityTimer() {
+  if (!appState.authenticated) return;
+
+  clearTimeout(inactivityTimer);
+  clearTimeout(warningTimer);
+  clearInterval(countdownInterval);
+
+  const warningModal = document.getElementById("inactivityWarningModal");
+  if (warningModal) warningModal.classList.remove("active");
+
+  saveSessionToStorage();
+
+  warningTimer = setTimeout(() => {
+    showInactivityWarningModal();
+  }, WARNING_TIMEOUT_MS);
+
+  inactivityTimer = setTimeout(() => {
+    handleInactivityAutoLogout();
+  }, INACTIVITY_TIMEOUT_MS);
+}
+
+function showInactivityWarningModal() {
+  if (!appState.authenticated) return;
+  const warningModal = document.getElementById("inactivityWarningModal");
+  const countdownText = document.getElementById("inactivityCountdownText");
+  if (warningModal) warningModal.classList.add("active");
+
+  let remainingSeconds = 60;
+  if (countdownText) countdownText.textContent = remainingSeconds;
+
+  clearInterval(countdownInterval);
+  countdownInterval = setInterval(() => {
+    remainingSeconds--;
+    if (countdownText) countdownText.textContent = remainingSeconds;
+    if (remainingSeconds <= 0) {
+      clearInterval(countdownInterval);
+    }
+  }, 1000);
+}
+
+function handleInactivityAutoLogout() {
+  clearTimeout(inactivityTimer);
+  clearTimeout(warningTimer);
+  clearInterval(countdownInterval);
+
+  const warningModal = document.getElementById("inactivityWarningModal");
+  if (warningModal) warningModal.classList.remove("active");
+
+  if (appState.authenticated) {
+    addActivityLog("LOGOUT", "InactivityEngine", `Sesión cerrada automáticamente por inactividad de 10 minutos (${appState.currentUser?.email || 'N/A'}).`);
+    appState.authenticated = false;
+    clearSessionFromStorage();
+    checkAuthentication();
+    alert("🔒 Su sesión ha sido cerrada automáticamente tras 10 minutos de inactividad por motivos de seguridad.");
+  }
+}
+
+function initInactivityListeners() {
+  let lastReset = 0;
+  const events = ["mousemove", "keydown", "touchstart", "click", "scroll"];
+  events.forEach(evt => {
+    window.addEventListener(evt, () => {
+      const now = Date.now();
+      if (appState.authenticated && now - lastReset > 3000) {
+        lastReset = now;
+        resetInactivityTimer();
+      }
+    }, { passive: true });
+  });
+}
+
 // AUTHENTICATION ENGINE
 function checkAuthentication() {
   if (window.location.search) {
     try {
       window.history.replaceState({}, document.title, window.location.pathname);
     } catch (e) {}
+  }
+  if (!appState.authenticated) {
+    loadSessionFromStorage();
   }
   const loginOverlay = document.getElementById("loginScreen");
   const appContainer = document.getElementById("app");
@@ -93699,6 +93818,7 @@ function checkAuthentication() {
       appContainer.style.display = "block";
     }
     document.body.style.overflow = "auto";
+    resetInactivityTimer();
   }
 }
 
@@ -93858,6 +93978,7 @@ function completeLoginProcess(matchingUser) {
   };
 
   appState.authenticated = true;
+  saveSessionToStorage();
 
   updateHeaderUserControls();
 
@@ -93869,10 +93990,14 @@ function completeLoginProcess(matchingUser) {
 
 function handleLogout() {
   if (confirm("¿Está seguro de que desea cerrar la sesión activa?")) {
-    addActivityLog("LOGOUT", "SessionAuth", `Cierre de sesión del usuario '${appState.currentUser.email}'.`);
+    addActivityLog("LOGOUT", "SessionAuth", `Cierre de sesión del usuario '${appState.currentUser?.email || 'N/A'}'.`);
     appState.authenticated = false;
     appState.realUserEmail = null;
-    
+    clearSessionFromStorage();
+    clearTimeout(inactivityTimer);
+    clearTimeout(warningTimer);
+    clearInterval(countdownInterval);
+
     const emailInput = document.getElementById("loginEmail");
     const passwordInput = document.getElementById("loginPassword");
     const errorMsgBox = document.getElementById("loginErrorMessage");
@@ -93896,6 +94021,7 @@ document.addEventListener("DOMContentLoaded", () => {
   populateAmazonSidebarFilters();
   initMovementProductAutocomplete();
   initCustomerAutocomplete();
+  initInactivityListeners();
   checkAuthentication();
   renderAllViews();
 
@@ -97036,14 +97162,23 @@ function simulateBarcodeScan(scannedCode) {
   const codeTrimmed = scannedCode.trim();
   const codeLower = codeTrimmed.toLowerCase();
 
-  // Populate catalog search filter automatically
+  // 1. Populate catalog search filter automatically
   const catalogSearchElem = document.getElementById("catalogSearch");
   if (catalogSearchElem) {
     catalogSearchElem.value = codeTrimmed;
-    renderProductsTable();
+    catalogSearchElem.style.borderColor = "var(--accent-green)";
+    catalogSearchElem.style.boxShadow = "0 0 12px var(--accent-green-glow)";
+    setTimeout(() => {
+      catalogSearchElem.style.borderColor = "";
+      catalogSearchElem.style.boxShadow = "";
+    }, 4000);
   }
 
-  // 1. Search product by barcode, SKU or name
+  // Switch to catalog view so user sees the filtered results
+  switchView('view-catalog');
+  renderCatalog();
+
+  // 2. Search product by barcode, SKU or name
   const product = appState.products.find(p => 
     (p.barcode && p.barcode.toLowerCase() === codeLower) || 
     p.sku.toLowerCase() === codeLower || 
@@ -97052,11 +97187,11 @@ function simulateBarcodeScan(scannedCode) {
 
   if (product) {
     selectAutocompleteProduct(product.id);
-    alert(`📷 CÓDIGO LEÍDO CON ÉXITO: "${codeTrimmed}"\n\nProducto: [${product.sku}] ${product.name}\n${product.barcode ? 'Código de Barras EAN: ' + product.barcode : ''}`);
+    alert(`📷 CÓDIGO ESCANEADO EXITOSAMENTE:\n"${codeTrimmed}"\n\n✅ Encontrado: [${product.sku}] ${product.name}\n${product.barcode ? 'EAN: ' + product.barcode : ''}\n\nEl producto ha sido filtrado en el catálogo y seleccionado en Kardex.`);
     return;
   }
 
-  // 2. Search serialized item by serial number
+  // 3. Search serialized item by serial number
   const item = appState.serializedItems.find(i => i.serialNumber.toLowerCase().includes(codeLower));
   if (item) {
     switchView('view-equipment');
@@ -97067,7 +97202,7 @@ function simulateBarcodeScan(scannedCode) {
     return;
   }
 
-  alert(`📷 Código Leído: "${codeTrimmed}". Se ha colocado automáticamente en el filtro de búsqueda.`);
+  alert(`📷 Código Escaneado: "${codeTrimmed}". Se ha pegado en el buscador para autofiltrar el catálogo.`);
 }
 
 function openProductModal() {
@@ -97135,8 +97270,16 @@ function openEditProductModal(productId) {
     return;
   }
 
+  const editTitle = document.getElementById("editProductTitle");
+  if (editTitle) {
+    editTitle.textContent = `✏️ Editar Ficha: [${product.sku}] ${product.name}`;
+  }
+
   document.getElementById("editProductId").value = product.id;
   document.getElementById("editSku").value = product.sku || "";
+  if (document.getElementById("editBarcode")) {
+    document.getElementById("editBarcode").value = product.barcode || "";
+  }
   document.getElementById("editName").value = product.name || "";
   document.getElementById("editDescription").value = product.description || "";
   document.getElementById("editUnit").value = product.unitOfMeasure || "UNIDAD";
@@ -97166,17 +97309,27 @@ function openEditProductModal(productId) {
       return `
         <div class="form-row" style="margin-bottom: 0.4rem; align-items: center;">
           <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); flex: 1;">📍 ${loc.name}</div>
-          <input type="number" min="0" class="form-control edit-loc-stock-input" data-loc-id="${loc.id}" value="${qty}" style="padding: 0.3rem 0.5rem; max-width: 130px;">
+          <input type="number" min="0" class="form-control edit-loc-stock-input" data-loc-id="${loc.id}" value="${qty}" onchange="recalculateTotalStockFromLocations()" style="padding: 0.3rem 0.5rem; max-width: 130px;">
         </div>
       `;
     }).join('');
   }
 
-  document.getElementById("editProductModal").classList.add("active");
+  switchView('view-edit-product');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function recalculateTotalStockFromLocations() {
+  let total = 0;
+  document.querySelectorAll(".edit-loc-stock-input").forEach(input => {
+    total += parseInt(input.value) || 0;
+  });
+  const totalInput = document.getElementById("editPhysicalStock");
+  if (totalInput) totalInput.value = total;
 }
 
 function closeEditProductModal() {
-  document.getElementById("editProductModal").classList.remove("active");
+  switchView('view-catalog');
 }
 
 function handleUpdateProduct(e) {
@@ -97194,13 +97347,13 @@ function handleUpdateProduct(e) {
   }
 
   const sku = document.getElementById("editSku").value.trim();
+  const barcode = document.getElementById("editBarcode") ? document.getElementById("editBarcode").value.trim() : "";
   const name = document.getElementById("editName").value.trim();
   const description = document.getElementById("editDescription").value.trim();
   const categoryId = document.getElementById("editCategory").value;
   const unitOfMeasure = document.getElementById("editUnit").value;
   const baseCost = parseFloat(document.getElementById("editBaseCost").value) || 0;
   const salePrice = parseFloat(document.getElementById("editSalePrice").value) || 0;
-  const physicalStock = parseInt(document.getElementById("editPhysicalStock").value) || 0;
   const reservedStock = parseInt(document.getElementById("editReservedStock").value) || 0;
   const minStockAlert = parseInt(document.getElementById("editMinStock").value) || 0;
   const warrantyMonths = parseInt(document.getElementById("editWarrantyMonths").value) || 0;
@@ -97208,16 +97361,19 @@ function handleUpdateProduct(e) {
 
   const categoryObj = appState.categories.find(c => c.id === categoryId);
 
-  // Collect Stock by Location
+  // Collect Stock by Location and recalculate physicalStock
+  let physicalStock = 0;
   const stockByLocation = {};
   document.querySelectorAll(".edit-loc-stock-input").forEach(input => {
     const locId = input.getAttribute("data-loc-id");
     const val = parseInt(input.value) || 0;
     stockByLocation[locId] = val;
+    physicalStock += val;
   });
 
   // Update object properties
   product.sku = sku;
+  product.barcode = barcode;
   product.name = name;
   product.description = description;
   product.categoryId = categoryId;
@@ -97233,10 +97389,10 @@ function handleUpdateProduct(e) {
   product.stockByLocation = stockByLocation;
 
   // Record audit log entry
-  addActivityLog("EDICION_PRODUCTO", "ProductManagement", `Modificación completa de producto e inventario '${sku} - ${name}' por usuario '${appState.currentUser.name || appState.currentUser.email}'`);
+  addActivityLog("EDICION_PRODUCTO", "ProductManagement", `Modificación completa de producto e inventario '${sku} - ${name}' (Barcode: ${barcode || 'N/A'}) por usuario '${appState.currentUser.name || appState.currentUser.email}'`);
 
   alert(`✅ Producto '${sku} - ${name}' e inventario actualizados exitosamente.`);
-  closeEditProductModal();
+  switchView('view-catalog');
   populateDropdowns();
   renderAllViews();
 }

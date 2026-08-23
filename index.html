@@ -414,6 +414,138 @@
         </section>
 
         <!-- ========================================== -->
+        <!-- VIEW: EDIT PRODUCT FULL-PAGE (FICHA DE PRODUCTO) -->
+        <!-- ========================================== -->
+        <section id="view-edit-product" class="view-section">
+          <div class="panel-header" style="margin-bottom: 1rem;">
+            <div>
+              <button type="button" class="btn btn-secondary" onclick="switchView('view-catalog')" style="margin-bottom: 0.6rem; padding: 0.3rem 0.75rem; font-size: 0.82rem;">
+                ← Volver al Catálogo
+              </button>
+              <h2 class="panel-title" id="editProductTitle">✏️ Editar Ficha de Producto e Inventario</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Modifique la información comercial, código de barras, precios y stock distribuido por sedes.</p>
+            </div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button type="button" class="btn btn-secondary" onclick="switchView('view-catalog')">Cancelar</button>
+              <button type="button" class="btn btn-primary" onclick="document.getElementById('editProductForm').requestSubmit()">💾 Guardar Cambios</button>
+            </div>
+          </div>
+
+          <div class="panel" style="max-width: 1000px; margin: 0 auto;">
+            <form id="editProductForm" onsubmit="handleUpdateProduct(event)">
+              <input type="hidden" id="editProductId">
+              
+              <h3 style="font-size: 0.98rem; font-weight: 700; color: var(--accent-green); margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;">
+                📦 1. Identificación y Descripción del Producto
+              </h3>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="editSku">SKU / Código Interno *</label>
+                  <input type="text" id="editSku" class="form-control" required placeholder="Ej. MC 001">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="editBarcode">Código de Barras / EAN-13 (Escanear o Digitar)</label>
+                  <input type="text" id="editBarcode" class="form-control" placeholder="Ej. 8412345678905">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="editName">Nombre del Producto *</label>
+                <input type="text" id="editName" class="form-control" required placeholder="Nombre comercial completo">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="editDescription">Descripción / Detalles Técnicos *</label>
+                <textarea id="editDescription" class="form-control" rows="2" required placeholder="Marca, proveedor, especificaciones..."></textarea>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="editCategory">Categoría Personalizada *</label>
+                  <select id="editCategory" class="form-control" required>
+                    <!-- JS -->
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="editUnit">Unidad de Venta *</label>
+                  <select id="editUnit" class="form-control" required>
+                    <option value="UNIDAD">Unidad (UND)</option>
+                    <option value="FRASCO">Frasco</option>
+                    <option value="CAJA">Caja</option>
+                    <option value="PAQUETE X 5 UND">Paquete x 5 UND</option>
+                    <option value="PAQUETE X 10 UND">Paquete x 10 UND</option>
+                    <option value="KIT">Kit / Equipo</option>
+                    <option value="DETERMINACION">Determ (Prueba)</option>
+                    <option value="LITRO">Litro</option>
+                    <option value="GALON">Galón</option>
+                    <option value="KILO">Kilo</option>
+                    <option value="ROLLO">Rollo</option>
+                  </select>
+                </div>
+              </div>
+
+              <h3 style="font-size: 0.98rem; font-weight: 700; color: var(--accent-green); margin-top: 1.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;">
+                💰 2. Precios y Reglas de Alerta
+              </h3>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="editBaseCost">Costo Base ($ COP / USD) *</label>
+                  <input type="number" step="0.01" id="editBaseCost" class="form-control" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="editSalePrice">Precio de Venta ($ COP / USD) *</label>
+                  <input type="number" step="0.01" id="editSalePrice" class="form-control" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="editMinStock">Stock Mínimo de Alerta *</label>
+                  <input type="number" min="0" id="editMinStock" class="form-control" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="editWarrantyMonths">Garantía del Fabricante (Meses)</label>
+                  <input type="number" min="0" id="editWarrantyMonths" class="form-control" value="0">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="editReqSerial">Requiere Número de Serie *</label>
+                  <select id="editReqSerial" class="form-control" required>
+                    <option value="false">No (Manejo por Cantidad)</option>
+                    <option value="true">Sí (Control Individual por Serial)</option>
+                  </select>
+                </div>
+              </div>
+
+              <h3 style="font-size: 0.98rem; font-weight: 700; color: var(--accent-green); margin-top: 1.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;">
+                📍 3. Distribución de Inventario Físico por Sede / Bodega
+              </h3>
+
+              <div id="editProductStockByLocationContainer" style="background: rgba(15,23,42,0.6); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.5rem;">
+                <!-- JS populated inputs per location -->
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="editPhysicalStock">Stock Físico Total Calculado</label>
+                  <input type="number" id="editPhysicalStock" class="form-control" readonly style="background: rgba(15,23,42,0.9); font-weight: 700;">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="editReservedStock">Stock Reservado / Bloqueado</label>
+                  <input type="number" id="editReservedStock" class="form-control" value="0">
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color); flex-wrap: wrap;">
+                <button type="button" class="btn btn-secondary" onclick="switchView('view-catalog')">← Volver al Catálogo</button>
+                <button type="submit" class="btn btn-primary" style="padding: 0.6rem 1.5rem; font-size: 0.95rem;">💾 Guardar Todos los Cambios</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
         <!-- VIEW: VALIDACIONES PENDIENTES DE INVENTARIO -->
         <!-- ========================================== -->
         <section id="view-pending-validations" class="view-section">
@@ -1961,6 +2093,20 @@
           <div style="max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;" id="modalProductList">
             <!-- Dynamic product selection cards -->
           </div>
+        </div>
+      </div>
+    <!-- Inactivity Warning Modal -->
+    <div id="inactivityWarningModal" class="modal-overlay" style="z-index: 10000;">
+      <div class="modal-content" style="max-width: 480px; text-align: center; border: 2px solid var(--accent-amber); padding: 1.5rem;">
+        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⏳</div>
+        <h3 style="font-size: 1.2rem; font-weight: 700; color: var(--accent-amber); margin-bottom: 0.5rem;">Advertencia de Inactividad</h3>
+        <p style="font-size: 0.9rem; color: var(--text-main); margin-bottom: 1rem; line-height: 1.5;">
+          Su sesión se cerrará automáticamente por seguridad en <strong id="inactivityCountdownText" style="color: #ef4444; font-size: 1.1rem; font-weight: 800;">60</strong> segundos debido a inactividad.
+        </p>
+        <div style="display: flex; gap: 0.5rem; justify-content: center;">
+          <button type="button" class="btn btn-primary" onclick="resetInactivityTimer()" style="padding: 0.6rem 1.2rem; font-size: 0.9rem; font-weight: 600;">
+            🟢 Mantener Sesión Activa
+          </button>
         </div>
       </div>
     </div>
