@@ -586,7 +586,7 @@
                 </div>
                 <div class="form-group">
                   <label class="form-label" for="editReqSerial">Requiere Número de Serie *</label>
-                  <select id="editReqSerial" class="form-control" required>
+                  <select id="editReqSerial" class="form-control" required onchange="toggleFichaSerialSection()">
                     <option value="false">No (Manejo por Cantidad)</option>
                     <option value="true">Sí (Control Individual por Serial)</option>
                   </select>
@@ -604,11 +604,33 @@
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label" for="editPhysicalStock">Stock Físico Total Calculado</label>
-                  <input type="number" id="editPhysicalStock" class="form-control" readonly style="background: rgba(15,23,42,0.9); font-weight: 700;">
+                  <input type="number" id="editPhysicalStock" class="form-control" readonly style="background: var(--form-input-bg); color: var(--accent-green); font-weight: 800; font-size: 1.1rem; border: 1px solid var(--border-highlight);">
                 </div>
                 <div class="form-group">
                   <label class="form-label" for="editReservedStock">Stock Reservado / Bloqueado</label>
                   <input type="number" id="editReservedStock" class="form-control" value="0">
+                </div>
+              </div>
+
+              <!-- Section 4: Serial Registration in Product Ficha -->
+              <div id="editProductSerialsSection" style="display: none; margin-top: 1.5rem;">
+                <h3 style="font-size: 0.98rem; font-weight: 700; color: var(--accent-green); margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem; display: flex; align-items: center; gap: 0.5rem;">
+                  🏷️ 4. Registro y Carga de Números de Serie Individuales por Unidad
+                </h3>
+
+                <div style="background: var(--card-sub-bg); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-highlight); margin-bottom: 1.5rem;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <span style="font-size: 0.82rem; color: var(--text-muted);">
+                      Digite o escanee con la cámara los seriales de fábrica correspondientes a las unidades en stock:
+                    </span>
+                    <button type="button" class="btn btn-camera" style="padding: 0.3rem 0.7rem; font-size: 0.78rem;" onclick="addFichaSerialRow()" title="Agregar nueva casilla de serial">
+                      ➕ + Casilla de Serial
+                    </button>
+                  </div>
+
+                  <div id="editProductSerialsContainer" style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 350px; overflow-y: auto; padding-right: 0.3rem;">
+                    <!-- Dynamic Serial Inputs -->
+                  </div>
                 </div>
               </div>
 

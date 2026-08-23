@@ -97488,8 +97488,109 @@ function openEditProductModal(productId) {
     }).join('');
   }
 
+  // Populate Section 4: Serials in Ficha
+  toggleFichaSerialSection();
+
   switchView('view-edit-product');
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function toggleFichaSerialSection() {
+  const reqSelect = document.getElementById("editReqSerial");
+  const section = document.getElementById("editProductSerialsSection");
+  if (!reqSelect || !section) return;
+
+  if (reqSelect.value === "true") {
+    section.style.display = "block";
+    const productId = document.getElementById("editProductId")?.value;
+    if (productId) {
+      const product = appState.products.find(p => p.id === productId);
+      if (product) renderFichaSerials(product);
+    }
+  } else {
+    section.style.display = "none";
+  }
+}
+
+function renderFichaSerials(product) {
+  const container = document.getElementById("editProductSerialsContainer");
+  if (!container) return;
+
+  const serials = appState.serializedItems.filter(i => i.productId === product.id && i.status === 'EN_STOCK');
+
+  let totalStock = product.physicalStock || 0;
+  if (totalStock === 0 && document.querySelectorAll(".edit-loc-stock-input").length > 0) {
+    document.querySelectorAll(".edit-loc-stock-input").forEach(inp => totalStock += parseInt(inp.value) || 0);
+  }
+
+  const rowsCount = Math.max(totalStock, serials.length);
+
+  if (rowsCount === 0) {
+    container.innerHTML = `<div style="color: var(--text-muted); font-size: 0.82rem; padding: 0.5rem;">⚠️ No hay existencias físicas en stock. Incremente la cantidad por sede arriba para habilitar casillas de serial.</div>`;
+    return;
+  }
+
+  let html = '';
+  for (let i = 0; i < rowsCount; i++) {
+    const item = serials[i];
+    const sValue = item ? item.serialNumber : '';
+    const locId = item ? item.currentLocationId : (appState.locations[0] ? appState.locations[0].id : 'loc-1');
+
+    html += `
+      <div class="form-row ficha-serial-row" style="align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+        <div style="font-size: 0.78rem; color: var(--text-muted); width: 32px; text-align: right;">#${i + 1}</div>
+        <div style="flex: 1; min-width: 150px;">
+          <select class="form-control ficha-serial-loc-select" style="font-size: 0.8rem; padding: 0.3rem 0.5rem;">
+            ${appState.locations.map(l => `<option value="${l.id}" ${l.id === locId ? 'selected' : ''}>${l.name}</option>`).join('')}
+          </select>
+        </div>
+        <div style="flex: 2; min-width: 200px; display: flex; gap: 0.4rem;">
+          <input type="text" class="form-control ficha-serial-num-input" value="${sValue}" placeholder="Serial Único (Ej. SN-TED-2026-${String(i+1).padStart(3, '0')})" style="font-family: monospace; font-size: 0.85rem; padding: 0.3rem 0.5rem;" data-original-id="${item ? item.id : ''}">
+          <button type="button" class="btn btn-camera" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; white-space: nowrap;" onclick="scanFichaSerialInput(this)">
+            📷 Escanear
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  container.innerHTML = html;
+}
+
+function addFichaSerialRow() {
+  const container = document.getElementById("editProductSerialsContainer");
+  if (!container) return;
+
+  const count = container.querySelectorAll(".ficha-serial-row").length + 1;
+  const newRow = document.createElement("div");
+  newRow.className = "form-row ficha-serial-row";
+  newRow.style.cssText = "align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;";
+  newRow.innerHTML = `
+    <div style="font-size: 0.78rem; color: var(--text-muted); width: 32px; text-align: right;">#${count}</div>
+    <div style="flex: 1; min-width: 150px;">
+      <select class="form-control ficha-serial-loc-select" style="font-size: 0.8rem; padding: 0.3rem 0.5rem;">
+        ${appState.locations.map(l => `<option value="${l.id}">${l.name}</option>`).join('')}
+      </select>
+    </div>
+    <div style="flex: 2; min-width: 200px; display: flex; gap: 0.4rem;">
+      <input type="text" class="form-control ficha-serial-num-input" value="" placeholder="Serial Único de Fábrica" style="font-family: monospace; font-size: 0.85rem; padding: 0.3rem 0.5rem;" data-original-id="">
+      <button type="button" class="btn btn-camera" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; white-space: nowrap;" onclick="scanFichaSerialInput(this)">
+        📷 Escanear
+      </button>
+    </div>
+  `;
+
+  if (container.children.length === 1 && !container.children[0].classList.contains("ficha-serial-row")) {
+    container.innerHTML = "";
+  }
+  container.appendChild(newRow);
+}
+
+function scanFichaSerialInput(btnBtn) {
+  const input = btnBtn.previousElementSibling;
+  startCameraScanner((code) => {
+    if (input) input.value = code;
+  });
 }
 
 function recalculateTotalStockFromLocations() {
@@ -97499,6 +97600,12 @@ function recalculateTotalStockFromLocations() {
   });
   const totalInput = document.getElementById("editPhysicalStock");
   if (totalInput) totalInput.value = total;
+
+  const productId = document.getElementById("editProductId")?.value;
+  if (productId) {
+    const product = appState.products.find(p => p.id === productId);
+    if (product) renderFichaSerials(product);
+  }
 }
 
 function closeEditProductModal() {
@@ -97560,6 +97667,50 @@ function handleUpdateProduct(e) {
   product.warrantyMonths = warrantyMonths;
   product.requiresSerial = requiresSerial;
   product.stockByLocation = stockByLocation;
+
+  // Save/Update Serials from Product Ficha
+  if (requiresSerial) {
+    const serialRows = document.querySelectorAll(".ficha-serial-row");
+    serialRows.forEach(row => {
+      const input = row.querySelector(".ficha-serial-num-input");
+      const locSelect = row.querySelector(".ficha-serial-loc-select");
+      if (input && input.value.trim()) {
+        const sNum = input.value.trim().toUpperCase();
+        const origId = input.getAttribute("data-original-id");
+        const lId = locSelect ? locSelect.value : "loc-1";
+
+        if (origId) {
+          const item = appState.serializedItems.find(i => i.id === origId);
+          if (item) {
+            item.serialNumber = sNum;
+            item.currentLocationId = lId;
+          }
+        } else {
+          let existingItem = appState.serializedItems.find(i => i.serialNumber === sNum);
+          if (!existingItem) {
+            appState.serializedItems.push({
+              id: `ser-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+              productId: product.id,
+              serialNumber: sNum,
+              status: "EN_STOCK",
+              currentLocationId: lId,
+              currentCustomerId: null,
+              entryDate: new Date().toISOString().split("T")[0],
+              saleDate: null,
+              invoiceNumber: null,
+              attachments: [],
+              history: [{
+                type: "INGRESO_FICHA",
+                date: new Date().toISOString().split("T")[0],
+                user: appState.currentUser ? appState.currentUser.name : "Administrador",
+                description: "Carga de serial individual desde la Ficha de Información del Producto."
+              }]
+            });
+          }
+        }
+      }
+    });
+  }
 
   // Record audit log entry
   addActivityLog("EDICION_PRODUCTO", "ProductManagement", `Modificación completa de producto e inventario '${sku} - ${name}' (Barcode: ${barcode || 'N/A'}) por usuario '${appState.currentUser.name || appState.currentUser.email}'`);
