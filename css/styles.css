@@ -1145,6 +1145,49 @@ body {
   color: var(--text-muted);
 }
 
+/* Multi-Select Popover Filter Component */
+.multi-select-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.multi-select-btn {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.74rem;
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.multi-select-btn:hover {
+  border-color: var(--accent-green);
+}
+
+.multi-select-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 210px;
+  max-height: 230px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-green);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+  z-index: 1200;
+  padding: 0.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  backdrop-filter: blur(12px);
+}
+
 /* Amazon-style Catalog Layout */
 .amazon-catalog-layout {
   display: grid;

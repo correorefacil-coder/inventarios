@@ -95290,41 +95290,84 @@ function clearAutocompleteProduct() {
 }
 
 let movAutocompleteFilterState = {
-  brand: "ALL",
-  supplier: "ALL",
-  sort: "sku_asc"
+  brands: [],
+  suppliers: [],
+  sort: "sku_asc",
+  openPopover: null
 };
+
+function toggleInlineFilterPopover(popoverType, event) {
+  if (event) event.stopPropagation();
+  if (movAutocompleteFilterState.openPopover === popoverType) {
+    movAutocompleteFilterState.openPopover = null;
+  } else {
+    movAutocompleteFilterState.openPopover = popoverType;
+  }
+  renderMovementProductSuggestions();
+}
+
+function toggleInlineBrandFilter(brandVal, event) {
+  if (event) event.stopPropagation();
+  const idx = movAutocompleteFilterState.brands.indexOf(brandVal);
+  if (idx > -1) {
+    movAutocompleteFilterState.brands.splice(idx, 1);
+  } else {
+    movAutocompleteFilterState.brands.push(brandVal);
+  }
+  renderMovementProductSuggestions();
+}
+
+function toggleInlineSupplierFilter(supplierVal, event) {
+  if (event) event.stopPropagation();
+  const idx = movAutocompleteFilterState.suppliers.indexOf(supplierVal);
+  if (idx > -1) {
+    movAutocompleteFilterState.suppliers.splice(idx, 1);
+  } else {
+    movAutocompleteFilterState.suppliers.push(supplierVal);
+  }
+  renderMovementProductSuggestions();
+}
+
+function clearInlineBrandFilters(event) {
+  if (event) event.stopPropagation();
+  movAutocompleteFilterState.brands = [];
+  renderMovementProductSuggestions();
+}
+
+function clearInlineSupplierFilters(event) {
+  if (event) event.stopPropagation();
+  movAutocompleteFilterState.suppliers = [];
+  renderMovementProductSuggestions();
+}
 
 function renderMovementProductSuggestions() {
   const searchInput = document.getElementById("movProductSearchInput");
   const dropdown = document.getElementById("movProductSuggestions");
   if (!searchInput || !dropdown) return;
 
-  const brandSelect = document.getElementById("movInlineFilterBrand");
-  const supplierSelect = document.getElementById("movInlineFilterSupplier");
   const sortSelect = document.getElementById("movInlineFilterSort");
-
-  if (brandSelect) movAutocompleteFilterState.brand = brandSelect.value;
-  if (supplierSelect) movAutocompleteFilterState.supplier = supplierSelect.value;
   if (sortSelect) movAutocompleteFilterState.sort = sortSelect.value;
 
   const query = searchInput.value.toLowerCase().trim();
 
-  const brandSet = new Set();
-  const supplierSet = new Set();
+  const brandCounts = {};
+  const supplierCounts = {};
   appState.products.forEach(p => {
     const { brand, supplier } = getProductBrandAndSupplier(p);
-    if (brand) brandSet.add(brand);
-    if (supplier) supplierSet.add(supplier);
+    if (brand) brandCounts[brand] = (brandCounts[brand] || 0) + 1;
+    if (supplier) supplierCounts[supplier] = (supplierCounts[supplier] || 0) + 1;
   });
 
-  const brandOptions = ['ALL', ...Array.from(brandSet).sort()].map(b =>
-    `<option value="${b}" ${movAutocompleteFilterState.brand === b ? 'selected' : ''}>${b === 'ALL' ? '🏷️ Marcas' : b}</option>`
-  ).join('');
+  const sortedBrands = Object.keys(brandCounts).sort();
+  const sortedSuppliers = Object.keys(supplierCounts).sort();
 
-  const supplierOptions = ['ALL', ...Array.from(supplierSet).sort()].map(s =>
-    `<option value="${s}" ${movAutocompleteFilterState.supplier === s ? 'selected' : ''}>${s === 'ALL' ? '🚚 Prov.' : s}</option>`
-  ).join('');
+  const brandLabel = movAutocompleteFilterState.brands.length === 0 
+    ? "🏷️ Marcas (Todas) ▾" 
+    : `🏷️ Marcas (${movAutocompleteFilterState.brands.length}) ▾`;
+
+  const supplierLabel = movAutocompleteFilterState.suppliers.length === 0 
+    ? "🚚 Prov. (Todos) ▾" 
+    : `🚚 Prov. (${movAutocompleteFilterState.suppliers.length}) ▾`;
 
   let matches = appState.products.filter(p => {
     const { brand, supplier } = getProductBrandAndSupplier(p);
@@ -95335,8 +95378,8 @@ function renderMovementProductSuggestions() {
       supplier.toLowerCase().includes(query) ||
       (p.description && p.description.toLowerCase().includes(query));
 
-    const matchesBrand = (movAutocompleteFilterState.brand === "ALL" || brand === movAutocompleteFilterState.brand);
-    const matchesSupplier = (movAutocompleteFilterState.supplier === "ALL" || supplier === movAutocompleteFilterState.supplier);
+    const matchesBrand = movAutocompleteFilterState.brands.length === 0 || movAutocompleteFilterState.brands.includes(brand);
+    const matchesSupplier = movAutocompleteFilterState.suppliers.length === 0 || movAutocompleteFilterState.suppliers.includes(supplier);
 
     return matchesQuery && matchesBrand && matchesSupplier;
   });
@@ -95358,16 +95401,77 @@ function renderMovementProductSuggestions() {
 
   matches = matches.slice(0, 15);
 
+  const brandPopoverHtml = movAutocompleteFilterState.openPopover === 'brand' ? `
+    <div class="multi-select-popover" onclick="event.stopPropagation()">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.2rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.25rem;">
+        <span style="font-size: 0.74rem; font-weight: 700; color: var(--accent-green);">Seleccionar Marcas</span>
+        <button type="button" class="btn btn-secondary" style="padding: 0.1rem 0.35rem; font-size: 0.68rem;" onclick="clearInlineBrandFilters(event)">Limpiar</button>
+      </div>
+      ${sortedBrands.map(b => {
+        const isChecked = movAutocompleteFilterState.brands.includes(b);
+        const safeBrand = b.replace(/'/g, "\\'");
+        return `
+          <label class="amazon-checkbox-item" onclick="toggleInlineBrandFilter('${safeBrand}', event)">
+            <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleInlineBrandFilter('${safeBrand}', event)">
+            <span>${b}</span>
+            <span class="amazon-count-badge">(${brandCounts[b]})</span>
+          </label>
+        `;
+      }).join('')}
+    </div>
+  ` : '';
+
+  const supplierPopoverHtml = movAutocompleteFilterState.openPopover === 'supplier' ? `
+    <div class="multi-select-popover" onclick="event.stopPropagation()">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.2rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.25rem;">
+        <span style="font-size: 0.74rem; font-weight: 700; color: var(--accent-green);">Seleccionar Proveedores</span>
+        <button type="button" class="btn btn-secondary" style="padding: 0.1rem 0.35rem; font-size: 0.68rem;" onclick="clearInlineSupplierFilters(event)">Limpiar</button>
+      </div>
+      ${sortedSuppliers.map(s => {
+        const isChecked = movAutocompleteFilterState.suppliers.includes(s);
+        const safeSupplier = s.replace(/'/g, "\\'");
+        return `
+          <label class="amazon-checkbox-item" onclick="toggleInlineSupplierFilter('${safeSupplier}', event)">
+            <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleInlineSupplierFilter('${safeSupplier}', event)">
+            <span>${s}</span>
+            <span class="amazon-count-badge">(${supplierCounts[s]})</span>
+          </label>
+        `;
+      }).join('')}
+    </div>
+  ` : '';
+
   const toolbarHtml = `
-    <div style="padding: 0.45rem 0.6rem; background: rgba(15, 23, 42, 0.95); border-bottom: 1px solid var(--border-color); display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; justify-content: space-between;">
-      <div style="display: flex; gap: 0.3rem; flex: 1; flex-wrap: wrap;">
-        <select id="movInlineFilterBrand" style="padding: 0.15rem 0.3rem; font-size: 0.72rem; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;" onchange="renderMovementProductSuggestions()">
-          ${brandOptions}
+    <div style="padding: 0.45rem 0.6rem; background: rgba(15, 23, 42, 0.95); border-bottom: 1px solid var(--border-color); display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; justify-content: space-between;">
+      <div style="display: flex; gap: 0.35rem; flex: 1; flex-wrap: wrap; align-items: center;">
+        
+        <div class="multi-select-wrapper">
+          <button type="button" class="multi-select-btn" onclick="toggleInlineFilterPopover('brand', event)" style="${movAutocompleteFilterState.brands.length > 0 ? 'border-color: var(--accent-green); background: rgba(16,185,129,0.15);' : ''}">
+            ${brandLabel}
+          </button>
+          ${brandPopoverHtml}
+        </div>
+
+        <div class="multi-select-wrapper">
+          <button type="button" class="multi-select-btn" onclick="toggleInlineFilterPopover('supplier', event)" style="${movAutocompleteFilterState.suppliers.length > 0 ? 'border-color: var(--accent-green); background: rgba(16,185,129,0.15);' : ''}">
+            ${supplierLabel}
+          </button>
+          ${supplierPopoverHtml}
+        </div>
+
+        <select id="movInlineFilterSort" style="padding: 0.2rem 0.4rem; font-size: 0.72rem; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;" onchange="renderMovementProductSuggestions()">
+          <option value="sku_asc" ${sort === 'sku_asc' ? 'selected' : ''}>SKU (A-Z)</option>
+          <option value="sku_desc" ${sort === 'sku_desc' ? 'selected' : ''}>SKU (Z-A)</option>
+          <option value="name_asc" ${sort === 'name_asc' ? 'selected' : ''}>Nombre (A-Z)</option>
+          <option value="stock_desc" ${sort === 'stock_desc' ? 'selected' : ''}>Stock (Mayor)</option>
         </select>
-        <select id="movInlineFilterSupplier" style="padding: 0.15rem 0.3rem; font-size: 0.72rem; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;" onchange="renderMovementProductSuggestions()">
-          ${supplierOptions}
-        </select>
-        <select id="movInlineFilterSort" style="padding: 0.15rem 0.3rem; font-size: 0.72rem; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;" onchange="renderMovementProductSuggestions()">
+      </div>
+
+      <button type="button" class="btn btn-secondary" style="padding: 0.15rem 0.45rem; font-size: 0.7rem; background: rgba(16,185,129,0.2); border-color: var(--accent-green); color: var(--accent-green);" onclick="openProductSelectorModal()">
+        ⚡ Ver Modal
+      </button>
+    </div>
+  `;
           <option value="sku_asc" ${sort === 'sku_asc' ? 'selected' : ''}>SKU (A-Z)</option>
           <option value="sku_desc" ${sort === 'sku_desc' ? 'selected' : ''}>SKU (Z-A)</option>
           <option value="name_asc" ${sort === 'name_asc' ? 'selected' : ''}>Nombre (A-Z)</option>
@@ -95419,6 +95523,10 @@ function initMovementProductAutocomplete() {
   searchInput.addEventListener("focus", () => renderMovementProductSuggestions());
 
   document.addEventListener("click", (e) => {
+    if (!e.target.closest('.multi-select-wrapper') && movAutocompleteFilterState.openPopover) {
+      movAutocompleteFilterState.openPopover = null;
+      renderMovementProductSuggestions();
+    }
     if (!searchInput.contains(e.target) && !dropdown.contains(e.target) && !e.target.closest('#productSelectorModal')) {
       dropdown.style.display = "none";
     }
