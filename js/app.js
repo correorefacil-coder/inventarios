@@ -98349,22 +98349,6 @@ const excelIngestedCustomers = [
     "contactName": "000-3103511633-",
     "regimenIva": "ZULY TATIANA RAMIREZ SANCHEZ",
     "status": "Activo"
-  },
-  {
-    "id": "cust-xl-5345",
-    "name": "Procesado en: Agosto 19 2026 18:28",
-    "documentType": "Cédula de ciudadanía",
-    "documentTypeAbbr": "CC",
-    "documentNumber": "",
-    "verificationDigit": null,
-    "rawDoc": "",
-    "phone": "",
-    "email": "",
-    "city": "",
-    "address": "",
-    "contactName": "Procesado en: Agosto 19 2026 18:28",
-    "regimenIva": "",
-    "status": "Activo"
   }
 ];
 
