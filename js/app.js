@@ -94007,6 +94007,10 @@ function switchView(viewId) {
 
   document.querySelectorAll(`[data-view="${viewId}"]`).forEach(lnk => lnk.classList.add("active"));
 
+  if (viewId === 'view-catalog') {
+    populateAmazonSidebarFilters();
+    renderCatalog();
+  }
   if (viewId === 'view-forecasting') {
     runLinearRegressionForecast();
   }
@@ -95285,38 +95289,106 @@ function clearAutocompleteProduct() {
   handleProductSelectForMovement();
 }
 
-function initMovementProductAutocomplete() {
+let movAutocompleteFilterState = {
+  brand: "ALL",
+  supplier: "ALL",
+  sort: "sku_asc"
+};
+
+function renderMovementProductSuggestions() {
   const searchInput = document.getElementById("movProductSearchInput");
   const dropdown = document.getElementById("movProductSuggestions");
   if (!searchInput || !dropdown) return;
 
-  const handleSearch = () => {
-    const query = searchInput.value.toLowerCase().trim();
-    if (!query) {
-      dropdown.style.display = "none";
-      return;
-    }
+  const brandSelect = document.getElementById("movInlineFilterBrand");
+  const supplierSelect = document.getElementById("movInlineFilterSupplier");
+  const sortSelect = document.getElementById("movInlineFilterSort");
 
-    const matches = appState.products.filter(p => {
-      const { brand, supplier } = getProductBrandAndSupplier(p);
-      return p.sku.toLowerCase().includes(query) ||
-             p.name.toLowerCase().includes(query) ||
-             brand.toLowerCase().includes(query) ||
-             supplier.toLowerCase().includes(query) ||
-             (p.description && p.description.toLowerCase().includes(query));
-    }).slice(0, 12);
+  if (brandSelect) movAutocompleteFilterState.brand = brandSelect.value;
+  if (supplierSelect) movAutocompleteFilterState.supplier = supplierSelect.value;
+  if (sortSelect) movAutocompleteFilterState.sort = sortSelect.value;
 
-    if (matches.length === 0) {
-      dropdown.innerHTML = `
-        <div style="padding: 0.75rem; text-align: center; color: var(--text-muted); font-size: 0.82rem;">
-          No se encontraron productos coincidentes para "${query}"
-        </div>
-      `;
-      dropdown.style.display = "block";
-      return;
-    }
+  const query = searchInput.value.toLowerCase().trim();
 
-    dropdown.innerHTML = matches.map(p => {
+  const brandSet = new Set();
+  const supplierSet = new Set();
+  appState.products.forEach(p => {
+    const { brand, supplier } = getProductBrandAndSupplier(p);
+    if (brand) brandSet.add(brand);
+    if (supplier) supplierSet.add(supplier);
+  });
+
+  const brandOptions = ['ALL', ...Array.from(brandSet).sort()].map(b =>
+    `<option value="${b}" ${movAutocompleteFilterState.brand === b ? 'selected' : ''}>${b === 'ALL' ? '🏷️ Marcas' : b}</option>`
+  ).join('');
+
+  const supplierOptions = ['ALL', ...Array.from(supplierSet).sort()].map(s =>
+    `<option value="${s}" ${movAutocompleteFilterState.supplier === s ? 'selected' : ''}>${s === 'ALL' ? '🚚 Prov.' : s}</option>`
+  ).join('');
+
+  let matches = appState.products.filter(p => {
+    const { brand, supplier } = getProductBrandAndSupplier(p);
+    const matchesQuery = !query || 
+      p.sku.toLowerCase().includes(query) ||
+      p.name.toLowerCase().includes(query) ||
+      brand.toLowerCase().includes(query) ||
+      supplier.toLowerCase().includes(query) ||
+      (p.description && p.description.toLowerCase().includes(query));
+
+    const matchesBrand = (movAutocompleteFilterState.brand === "ALL" || brand === movAutocompleteFilterState.brand);
+    const matchesSupplier = (movAutocompleteFilterState.supplier === "ALL" || supplier === movAutocompleteFilterState.supplier);
+
+    return matchesQuery && matchesBrand && matchesSupplier;
+  });
+
+  const sort = movAutocompleteFilterState.sort;
+  if (sort === "sku_asc") {
+    matches.sort((a, b) => a.sku.localeCompare(b.sku, undefined, { numeric: true }));
+  } else if (sort === "sku_desc") {
+    matches.sort((a, b) => b.sku.localeCompare(a.sku, undefined, { numeric: true }));
+  } else if (sort === "name_asc") {
+    matches.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sort === "name_desc") {
+    matches.sort((a, b) => b.name.localeCompare(a.name));
+  } else if (sort === "stock_desc") {
+    matches.sort((a, b) => b.physicalStock - a.physicalStock);
+  } else if (sort === "stock_asc") {
+    matches.sort((a, b) => a.physicalStock - b.physicalStock);
+  }
+
+  matches = matches.slice(0, 15);
+
+  const toolbarHtml = `
+    <div style="padding: 0.45rem 0.6rem; background: rgba(15, 23, 42, 0.95); border-bottom: 1px solid var(--border-color); display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; justify-content: space-between;">
+      <div style="display: flex; gap: 0.3rem; flex: 1; flex-wrap: wrap;">
+        <select id="movInlineFilterBrand" style="padding: 0.15rem 0.3rem; font-size: 0.72rem; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;" onchange="renderMovementProductSuggestions()">
+          ${brandOptions}
+        </select>
+        <select id="movInlineFilterSupplier" style="padding: 0.15rem 0.3rem; font-size: 0.72rem; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;" onchange="renderMovementProductSuggestions()">
+          ${supplierOptions}
+        </select>
+        <select id="movInlineFilterSort" style="padding: 0.15rem 0.3rem; font-size: 0.72rem; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;" onchange="renderMovementProductSuggestions()">
+          <option value="sku_asc" ${sort === 'sku_asc' ? 'selected' : ''}>SKU (A-Z)</option>
+          <option value="sku_desc" ${sort === 'sku_desc' ? 'selected' : ''}>SKU (Z-A)</option>
+          <option value="name_asc" ${sort === 'name_asc' ? 'selected' : ''}>Nombre (A-Z)</option>
+          <option value="stock_desc" ${sort === 'stock_desc' ? 'selected' : ''}>Stock (Mayor)</option>
+        </select>
+      </div>
+      <button type="button" class="btn btn-secondary" style="padding: 0.15rem 0.45rem; font-size: 0.7rem; background: rgba(16,185,129,0.2); border-color: var(--accent-green); color: var(--accent-green);" onclick="openProductSelectorModal()">
+        ⚡ Ver Modal
+      </button>
+    </div>
+  `;
+
+  let itemsHtml = '';
+  if (matches.length === 0) {
+    itemsHtml = `
+      <div style="padding: 0.75rem; text-align: center; color: var(--text-muted); font-size: 0.82rem;">
+        No se encontraron productos coincidentes.
+      </div>
+    `;
+  } else {
+    itemsHtml = matches.map(p => {
       const { brand, supplier } = getProductBrandAndSupplier(p);
       const avail = p.physicalStock - p.reservedStock;
       return `
@@ -95327,25 +95399,183 @@ function initMovementProductAutocomplete() {
           </div>
           <div style="font-weight: 600; font-size: 0.88rem; color: var(--text-main);">${p.name}</div>
           <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem;">
-            🏷️ Marca: ${brand} | 🚚 Prov: ${supplier}
+            🏷️ Marca: <strong>${brand}</strong> | 🚚 Prov: <strong>${supplier}</strong>
           </div>
         </div>
       `;
     }).join('');
+  }
 
-    dropdown.style.display = "block";
-  };
+  dropdown.innerHTML = toolbarHtml + itemsHtml;
+  dropdown.style.display = "block";
+}
 
-  searchInput.addEventListener("input", handleSearch);
-  searchInput.addEventListener("focus", () => {
-    if (searchInput.value.trim()) handleSearch();
-  });
+function initMovementProductAutocomplete() {
+  const searchInput = document.getElementById("movProductSearchInput");
+  const dropdown = document.getElementById("movProductSuggestions");
+  if (!searchInput || !dropdown) return;
+
+  searchInput.addEventListener("input", () => renderMovementProductSuggestions());
+  searchInput.addEventListener("focus", () => renderMovementProductSuggestions());
 
   document.addEventListener("click", (e) => {
-    if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+    if (!searchInput.contains(e.target) && !dropdown.contains(e.target) && !e.target.closest('#productSelectorModal')) {
       dropdown.style.display = "none";
     }
   });
+}
+
+function openProductSelectorModal() {
+  const modal = document.getElementById("productSelectorModal");
+  if (!modal) return;
+
+  populateModalSidebarFilters();
+  renderModalProductList();
+  modal.classList.add("active");
+}
+
+function closeProductSelectorModal() {
+  const modal = document.getElementById("productSelectorModal");
+  if (modal) modal.classList.remove("active");
+}
+
+function populateModalSidebarFilters() {
+  const brandContainer = document.getElementById("modalFilterBrandList");
+  const supplierContainer = document.getElementById("modalFilterSupplierList");
+  const categoryContainer = document.getElementById("modalFilterCategoryList");
+
+  if (!brandContainer) return;
+
+  const brandCounts = {};
+  const supplierCounts = {};
+  const categoryCounts = {};
+
+  appState.products.forEach(p => {
+    const { brand, supplier } = getProductBrandAndSupplier(p);
+    brandCounts[brand] = (brandCounts[brand] || 0) + 1;
+    supplierCounts[supplier] = (supplierCounts[supplier] || 0) + 1;
+
+    const categoryObj = appState.categories.find(c => c.id === p.categoryId);
+    const catName = categoryObj ? categoryObj.name : (p.category || "General");
+    categoryCounts[catName] = (categoryCounts[catName] || 0) + 1;
+  });
+
+  brandContainer.innerHTML = Object.keys(brandCounts).sort().map(b => `
+    <label class="amazon-checkbox-item">
+      <input type="checkbox" class="amazon-filter-chk chk-modal-brand" value="${b}" onchange="renderModalProductList()">
+      <span>${b}</span>
+      <span class="amazon-count-badge">(${brandCounts[b]})</span>
+    </label>
+  `).join('');
+
+  supplierContainer.innerHTML = Object.keys(supplierCounts).sort().map(s => `
+    <label class="amazon-checkbox-item">
+      <input type="checkbox" class="amazon-filter-chk chk-modal-supplier" value="${s}" onchange="renderModalProductList()">
+      <span>${s}</span>
+      <span class="amazon-count-badge">(${supplierCounts[s]})</span>
+    </label>
+  `).join('');
+
+  categoryContainer.innerHTML = Object.keys(categoryCounts).sort().map(c => `
+    <label class="amazon-checkbox-item">
+      <input type="checkbox" class="amazon-filter-chk chk-modal-category" value="${c}" onchange="renderModalProductList()">
+      <span>${c}</span>
+      <span class="amazon-count-badge">(${categoryCounts[c]})</span>
+    </label>
+  `).join('');
+}
+
+function clearModalProductFilters() {
+  document.querySelectorAll('.chk-modal-brand, .chk-modal-supplier, .chk-modal-category').forEach(c => c.checked = false);
+  const searchInput = document.getElementById("modalProductSearch");
+  const sortSelect = document.getElementById("modalProductSort");
+  if (searchInput) searchInput.value = "";
+  if (sortSelect) sortSelect.value = "default";
+  renderModalProductList();
+}
+
+function renderModalProductList() {
+  const container = document.getElementById("modalProductList");
+  if (!container) return;
+
+  const searchQuery = (document.getElementById("modalProductSearch")?.value || "").toLowerCase().trim();
+  const sortOrder = document.getElementById("modalProductSort")?.value || "default";
+
+  const selectedBrands = Array.from(document.querySelectorAll('.chk-modal-brand:checked')).map(c => c.value);
+  const selectedSuppliers = Array.from(document.querySelectorAll('.chk-modal-supplier:checked')).map(c => c.value);
+  const selectedCategories = Array.from(document.querySelectorAll('.chk-modal-category:checked')).map(c => c.value);
+
+  let filtered = appState.products.filter(p => {
+    const { brand, supplier } = getProductBrandAndSupplier(p);
+    const categoryObj = appState.categories.find(c => c.id === p.categoryId);
+    const catName = categoryObj ? categoryObj.name : (p.category || "General");
+
+    const matchesSearch = !searchQuery ||
+      p.sku.toLowerCase().includes(searchQuery) ||
+      p.name.toLowerCase().includes(searchQuery) ||
+      brand.toLowerCase().includes(searchQuery) ||
+      supplier.toLowerCase().includes(searchQuery);
+
+    const matchesBrand = selectedBrands.length === 0 || selectedBrands.includes(brand);
+    const matchesSupplier = selectedSuppliers.length === 0 || selectedSuppliers.includes(supplier);
+    const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(catName);
+
+    return matchesSearch && matchesBrand && matchesSupplier && matchesCategory;
+  });
+
+  if (sortOrder === "name_asc") {
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sortOrder === "name_desc") {
+    filtered.sort((a, b) => b.name.localeCompare(a.name));
+  } else if (sortOrder === "sku_asc") {
+    filtered.sort((a, b) => a.sku.localeCompare(b.sku, undefined, { numeric: true }));
+  } else if (sortOrder === "sku_desc") {
+    filtered.sort((a, b) => b.sku.localeCompare(a.sku, undefined, { numeric: true }));
+  } else if (sortOrder === "stock_desc") {
+    filtered.sort((a, b) => b.physicalStock - a.physicalStock);
+  } else if (sortOrder === "stock_asc") {
+    filtered.sort((a, b) => a.physicalStock - b.physicalStock);
+  } else if (sortOrder === "price_desc") {
+    filtered.sort((a, b) => b.salePrice - a.salePrice);
+  } else if (sortOrder === "price_asc") {
+    filtered.sort((a, b) => a.salePrice - b.salePrice);
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div style="padding: 2rem; text-align: center; color: var(--text-muted);">
+        No se encontraron productos con los filtros seleccionados.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map(p => {
+    const { brand, supplier } = getProductBrandAndSupplier(p);
+    const avail = p.physicalStock - p.reservedStock;
+    return `
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); transition: border-color 0.15s ease;" onmouseover="this.style.borderColor='var(--accent-green)'" onmouseout="this.style.borderColor='var(--border-color)'">
+        <div style="display: flex; flex-direction: column; gap: 0.15rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <strong style="color: var(--accent-green); font-family: monospace; font-size: 0.9rem;">${p.sku}</strong>
+            <span class="badge badge-purple" style="font-size: 0.72rem;">${p.category || 'General'}</span>
+          </div>
+          <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main);">${p.name}</div>
+          <div style="font-size: 0.78rem; color: var(--text-muted);">
+            🏷️ Marca: <strong>${brand}</strong> | 🚚 Prov: <strong>${supplier}</strong> | 📦 Physical: <strong>${p.physicalStock}</strong> (Disp: <strong>${avail}</strong>)
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary" style="padding: 0.35rem 0.85rem; font-size: 0.82rem; white-space: nowrap;" onclick="selectProductFromModal('${p.id}')">
+          ✓ Seleccionar
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+function selectProductFromModal(prodId) {
+  selectAutocompleteProduct(prodId);
+  closeProductSelectorModal();
 }
 
 function handleCatalogSearchInput() {
