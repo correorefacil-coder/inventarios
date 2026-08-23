@@ -83,12 +83,83 @@
     <!-- Header Navigation -->
     <header class="app-header">
       <div class="brand-container">
+        <button id="mobileMenuBtn" class="mobile-menu-trigger" onclick="toggleMobileDrawer()" title="Abrir Menú de Navegación">
+          ☰
+        </button>
         <div class="brand-logo" style="background: #10b981; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white;">MC</div>
         <div>
           <h1 class="brand-title">MÁS CAMPO</h1>
           <div class="brand-subtitle">Biotecnología Animal • Inventario Centralizado</div>
         </div>
       </div>
+
+    <!-- Mobile Navigation Drawer Overlay & Side Drawer -->
+    <div id="mobileDrawerOverlay" class="mobile-drawer-overlay" onclick="closeMobileDrawer()"></div>
+    <aside id="mobileDrawer" class="mobile-drawer">
+      <div class="mobile-drawer-header">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <div class="brand-logo" style="background: #10b981; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; width: 32px; height: 32px; font-size: 0.85rem; border-radius: 8px;">MC</div>
+          <div>
+            <div style="font-weight: 700; color: var(--text-main); font-size: 0.95rem;">MÁS CAMPO</div>
+            <div style="font-size: 0.72rem; color: var(--text-muted);">Biotecnología Animal</div>
+          </div>
+        </div>
+        <button class="mobile-drawer-close" onclick="closeMobileDrawer()" title="Cerrar Menú">✕</button>
+      </div>
+
+      <div class="mobile-drawer-user" id="mobileDrawerUserCard">
+        <div style="font-size: 0.78rem; color: var(--accent-green); font-weight: 600;" id="mobileDrawerUserName">Usuario Activo</div>
+        <div style="font-size: 0.72rem; color: var(--text-muted);" id="mobileDrawerUserRole">Rol: Administrador</div>
+      </div>
+
+      <nav class="mobile-drawer-nav">
+        <a class="drawer-nav-link active" data-view="view-dashboard" onclick="switchViewFromDrawer('view-dashboard')">
+          <span class="icon">📊</span> Dashboard & KPIs
+        </a>
+        <a class="drawer-nav-link" data-view="view-catalog" onclick="switchViewFromDrawer('view-catalog')">
+          <span class="icon">📦</span> Catálogo & Categorías
+        </a>
+        <a class="drawer-nav-link" data-view="view-locations" onclick="switchViewFromDrawer('view-locations')">
+          <span class="icon">📍</span> Ubicaciones & Traslados
+        </a>
+        <a class="drawer-nav-link" data-view="view-pending-validations" onclick="switchViewFromDrawer('view-pending-validations')">
+          <span class="icon">📋</span> Validaciones Pendientes <span id="mobilePendingBadge" class="badge badge-amber" style="margin-left: 0.3rem; display: none;">0</span>
+        </a>
+        <a class="drawer-nav-link" data-view="view-kardex" onclick="switchViewFromDrawer('view-kardex')">
+          <span class="icon">🔄</span> Kardex & Soportes
+        </a>
+        <a class="drawer-nav-link" data-view="view-equipment" onclick="switchViewFromDrawer('view-equipment')">
+          <span class="icon">🩺</span> Hoja de Vida & Garantías
+        </a>
+        <a class="drawer-nav-link" data-view="view-customers-analytics" onclick="switchViewFromDrawer('view-customers-analytics')">
+          <span class="icon">👤</span> Clientes & Analítica 360°
+        </a>
+        <a class="drawer-nav-link" data-view="view-reservations" onclick="switchViewFromDrawer('view-reservations')">
+          <span class="icon">🔒</span> Reservas & Bloqueos
+        </a>
+        <a class="drawer-nav-link" data-view="view-users" onclick="switchViewFromDrawer('view-users')">
+          <span class="icon">👥</span> Usuarios & Roles
+        </a>
+        <a class="drawer-nav-link" data-view="view-audit-logs" onclick="switchViewFromDrawer('view-audit-logs')">
+          <span class="icon">🛡️</span> Log Actividad & IP
+        </a>
+        <a class="drawer-nav-link" data-view="view-forecasting" onclick="switchViewFromDrawer('view-forecasting')">
+          <span class="icon">📈</span> Alertas & Regresión
+        </a>
+        <a class="drawer-nav-link" data-view="view-reports" onclick="switchViewFromDrawer('view-reports')">
+          <span class="icon">📄</span> Exportar Sigo & Reportes
+        </a>
+      </nav>
+
+      <div class="mobile-drawer-footer">
+        <button class="btn btn-secondary" onclick="openProfileModal(); closeMobileDrawer();" style="width: 100%; justify-content: center; font-size: 0.82rem; margin-bottom: 0.5rem;">
+          👤 Mi Perfil
+        </button>
+        <button class="btn btn-secondary" onclick="handleLogout(); closeMobileDrawer();" style="width: 100%; justify-content: center; font-size: 0.82rem; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;">
+          🚪 Cerrar Sesión
+        </button>
+      </div>
+    </aside>
 
       <!-- Sigo Auto Import, Excel Import, Theme Switcher & RBAC Role Selector -->
       <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
@@ -1293,32 +1364,6 @@
 
       </main>
     </div>
-
-    <!-- Mobile Bottom Nav -->
-    <nav class="mobile-nav">
-      <button class="mobile-nav-btn active" data-view="view-dashboard">
-        <span class="icon">📊</span>
-        <span>Inicio</span>
-      </button>
-      <button class="mobile-nav-btn" data-view="view-catalog">
-        <span class="icon">📦</span>
-        <span>Catálogo</span>
-      </button>
-
-      <button class="mobile-nav-btn" data-view="view-customers-analytics">
-        <span class="icon">👤</span>
-        <span>Clientes</span>
-      </button>
-
-      <button class="mobile-nav-btn" data-view="view-kardex">
-        <span class="icon">🔄</span>
-        <span>Kardex</span>
-      </button>
-      <button class="mobile-nav-btn" data-view="view-equipment">
-        <span class="icon">🩺</span>
-        <span>Garantías</span>
-      </button>
-    </nav>
 
     <!-- Interactive Attachment Preview Modal -->
     <div id="attachmentPreviewModal" class="modal-overlay">

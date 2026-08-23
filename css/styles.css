@@ -1368,3 +1368,151 @@ body {
   color: var(--text-muted);
   margin-left: auto;
 }
+
+/* ==========================================================================
+   MOBILE HAMBURGER BUTTON & SIDE DRAWER NAVIGATION SYSTEM
+   ========================================================================== */
+
+.mobile-menu-trigger {
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid var(--border-color);
+  font-size: 1.3rem;
+  color: var(--text-main);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-md);
+  margin-right: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.mobile-menu-trigger:hover,
+.mobile-menu-trigger:active {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+}
+
+.mobile-drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 99998;
+  display: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.mobile-drawer-overlay.active {
+  display: block;
+  opacity: 1;
+}
+
+.mobile-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 290px;
+  max-width: 85vw;
+  background: var(--bg-card);
+  border-right: 1px solid var(--border-color);
+  z-index: 99999;
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 10px 0 35px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.mobile-drawer.active {
+  transform: translateX(0);
+}
+
+.mobile-drawer-header {
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.mobile-drawer-close {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.3rem 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+.mobile-drawer-close:hover {
+  color: #ef4444;
+}
+
+.mobile-drawer-user {
+  padding: 0.85rem 1.25rem;
+  background: rgba(16, 185, 129, 0.08);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.mobile-drawer-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.drawer-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.9rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.drawer-nav-link:hover,
+.drawer-nav-link.active {
+  background: var(--bg-hover);
+  color: var(--accent-green);
+  font-weight: 600;
+}
+
+.drawer-nav-link .icon {
+  font-size: 1.1rem;
+}
+
+.mobile-drawer-footer {
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--border-color);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+/* Hide bottom nav bar completely */
+.mobile-nav {
+  display: none !important;
+}
+
+@media (max-width: 900px) {
+  .content-body {
+    padding-bottom: 2rem !important;
+  }
+}

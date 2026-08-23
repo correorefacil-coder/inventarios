@@ -93379,51 +93379,60 @@ function closeAttachmentPreviewModal() {
   if (modal) modal.classList.remove("active");
 }
 
-// HELPER: Auto-generate 100% of individual serials
+// HELPER: Serials management
 function ensureAllSerialsForProduct(product) {
-  if (!product.requiresSerial) return;
+  // Serial items are created strictly when doing Kardex movement entries or uploading manual records
+}
 
-  const skuClean = product.sku.replace(/\s+/g, '-');
-  const existingSerials = appState.serializedItems.filter(i => i.productId === product.id);
-  const totalCount = existingSerials.length;
+function ensureGlobalSerials() {
+  // No automatic mock serial generation
+}
 
-  if (totalCount < product.physicalStock) {
-    for (let k = 1; k <= product.physicalStock; k++) {
-      const candidateSerial = `SN-${skuClean}-2026-${String(k).padStart(3, '0')}`;
-      const exists = appState.serializedItems.some(i => i.productId === product.id && i.serialNumber === candidateSerial);
-      if (!exists) {
-        appState.serializedItems.push({
-          id: `ser-${product.id}-${k}`,
-          productId: product.id,
-          serialNumber: candidateSerial,
-          status: "EN_STOCK",
-          currentCustomerId: null,
-          entryDate: "2026-01-15",
-          saleDate: null,
-          invoiceNumber: "#EX25035",
-          attachments: [
-            { name: "Declaracion_Importacion_DIAN.pdf", type: "pdf", icon: "📄" },
-            { name: "Foto_Mercancia_Llegada.jpg", type: "image", icon: "📷" }
-          ],
-          history: [
-            { 
-              type: "INGRESO", 
-              date: "2026-01-15", 
-              user: "Carlos Mendoza", 
-              description: `Ingreso individual de bodega según Factura #EX25035 desde España.`,
-              attachments: [{ name: "Foto_Mercancia_Llegada.jpg", type: "image", icon: "📷" }]
-            }
-          ]
-        });
-      }
+// MOBILE DRAWER NAVIGATION CONTROLLER
+function toggleMobileDrawer() {
+  const overlay = document.getElementById("mobileDrawerOverlay");
+  const drawer = document.getElementById("mobileDrawer");
+  if (overlay && drawer) {
+    const isOpen = drawer.classList.contains("active");
+    if (isOpen) {
+      closeMobileDrawer();
+    } else {
+      openMobileDrawer();
     }
   }
 }
 
-function ensureGlobalSerials() {
-  appState.products.forEach(p => {
-    if (p.requiresSerial) ensureAllSerialsForProduct(p);
-  });
+function openMobileDrawer() {
+  const overlay = document.getElementById("mobileDrawerOverlay");
+  const drawer = document.getElementById("mobileDrawer");
+  if (overlay && drawer) {
+    overlay.classList.add("active");
+    drawer.classList.add("active");
+    
+    // Update user info card in drawer
+    const nameElem = document.getElementById("mobileDrawerUserName");
+    const roleElem = document.getElementById("mobileDrawerUserRole");
+    if (nameElem && appState.currentUser) {
+      nameElem.textContent = appState.currentUser.name || appState.currentUser.email;
+    }
+    if (roleElem && appState.currentUser) {
+      roleElem.textContent = `Rol: ${appState.currentUser.role || 'Usuario'}`;
+    }
+  }
+}
+
+function closeMobileDrawer() {
+  const overlay = document.getElementById("mobileDrawerOverlay");
+  const drawer = document.getElementById("mobileDrawer");
+  if (overlay && drawer) {
+    overlay.classList.remove("active");
+    drawer.classList.remove("active");
+  }
+}
+
+function switchViewFromDrawer(viewId) {
+  switchView(viewId);
+  closeMobileDrawer();
 }
 
 // ==========================================================================
