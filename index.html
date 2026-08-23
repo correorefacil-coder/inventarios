@@ -22,6 +22,9 @@
   <!-- Main Styles -->
   <link rel="stylesheet" href="css/styles.css">
 
+  <!-- ZXing Barcode Scanning Engine -->
+  <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+
   <!-- Anti-FOUC Theme Script -->
   <script>
     (function() {
@@ -396,7 +399,7 @@
                         <th>Desglose por Ubicación (Sedes)</th>
                         <th class="cost-column">Costo Base</th>
                         <th class="cost-column">Precio Venta</th>
-                        <th>Disponible</th>
+                        <th>Disponible / Bloqueado</th>
                         <th>Acciones / Gestión</th>
                       </tr>
                     </thead>
@@ -519,11 +522,14 @@
                   <input type="text" id="movInvoice" class="form-control" placeholder="Ej. 13837/ 7691">
                 </div>
 
-                <div class="form-group">
-                  <label class="form-label" for="movCustomer">Cliente / Proveedor Asociado</label>
-                  <select id="movCustomer" class="form-control">
-                    <!-- JS -->
-                  </select>
+                <div class="form-group" style="position: relative;">
+                  <label class="form-label" for="movCustomerSearchInput">Cliente / Proveedor Asociado (Autocompletar)</label>
+                  <div class="product-autocomplete-container">
+                    <input type="text" id="movCustomerSearchInput" class="form-control" placeholder="🔍 Buscar cliente por Nombre, Razón Social, NIT/Documento o Teléfono..." autocomplete="off">
+                    <input type="hidden" id="movCustomer">
+                    <div id="movCustomerSelectedCard" class="selected-product-card" style="display: none;"></div>
+                    <div id="movCustomerSuggestions" class="autocomplete-dropdown-list" style="display: none;"></div>
+                  </div>
                 </div>
 
                 <div class="form-group" id="serialInputGroup" style="display:none;">
@@ -1250,9 +1256,15 @@
         </div>
 
         <form id="newProductForm" onsubmit="handleCreateProduct(event)">
-          <div class="form-group">
-            <label class="form-label">SKU / Código Interno *</label>
-            <input type="text" id="newSku" class="form-control" required placeholder="Ej. MC 999">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">SKU / Código Interno *</label>
+              <input type="text" id="newSku" class="form-control" required placeholder="Ej. MC 999">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Código de Barras / EAN (Escanear)</label>
+              <input type="text" id="newBarcode" class="form-control" placeholder="Ej. 8412345678905">
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Nombre del Producto *</label>
@@ -1321,9 +1333,13 @@
               <input type="text" id="editSku" class="form-control" required>
             </div>
             <div class="form-group">
-              <label class="form-label">Nombre del Producto *</label>
-              <input type="text" id="editName" class="form-control" required>
+              <label class="form-label">Código de Barras / EAN-13</label>
+              <input type="text" id="editBarcode" class="form-control" placeholder="Ej. 8412345678905">
             </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nombre del Producto *</label>
+            <input type="text" id="editName" class="form-control" required>
           </div>
 
           <div class="form-group">

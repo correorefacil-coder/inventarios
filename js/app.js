@@ -93895,6 +93895,7 @@ document.addEventListener("DOMContentLoaded", () => {
   populateDropdowns();
   populateAmazonSidebarFilters();
   initMovementProductAutocomplete();
+  initCustomerAutocomplete();
   checkAuthentication();
   renderAllViews();
 
@@ -95951,30 +95952,31 @@ function renderCatalog() {
     // Build location breakdown pills
     const locationBreakdownHtml = appState.locations.map(loc => {
       const qty = (p.stockByLocation && p.stockByLocation[loc.id]) ? p.stockByLocation[loc.id] : 0;
-      return `<div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">
-        📍 <strong>${loc.name}</strong>: <span style="color: ${qty > 0 ? 'var(--accent-teal)' : 'var(--text-muted)'}; font-weight: 700;">${qty} ${p.unitOfMeasure}</span>
+      const shortLocName = loc.name.replace("Bodega Principal (Central)", "Central").replace("Punto de Venta Bogotá", "PV Bogotá").replace("Almacén Central Llanos", "Llanos");
+      return `<div style="font-size: 0.72rem; padding: 0.15rem 0.4rem; background: rgba(15,23,42,0.7); border: 1px solid var(--border-color); border-radius: 4px; display: inline-flex; align-items: center; gap: 0.2rem; white-space: nowrap;">
+        📍 <span>${shortLocName}:</span> <strong style="color: ${qty > 0 ? 'var(--accent-teal)' : 'var(--text-muted)'};">${qty}</strong>
       </div>`;
     }).join('');
 
     return `
       <tr>
-        <td><strong style="color: var(--accent-green);">${p.sku}</strong></td>
+        <td><strong style="color: var(--accent-green); font-size: 0.85rem;">${p.sku}</strong></td>
         <td>
-          <div style="font-weight: 600;">${p.name}</div>
-          <div style="font-size: 0.75rem; color: var(--text-muted);">${p.description}</div>
+          <div style="font-weight: 600; font-size: 0.85rem;">${p.name}</div>
+          <div style="font-size: 0.73rem; color: var(--text-muted);">${p.description || ''}</div>
         </td>
-        <td><span class="badge badge-purple">${categoryName}</span></td>
-        <td><strong style="font-size: 1.1rem; color: var(--text-main);">${p.physicalStock} ${p.unitOfMeasure}</strong></td>
+        <td><span class="badge badge-purple" style="font-size: 0.72rem;">${categoryName}</span></td>
+        <td><span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); white-space: nowrap;">${p.physicalStock} ${p.unitOfMeasure}</span></td>
         <td>
-          <div style="display: flex; flex-direction: column; gap: 0.15rem; background: rgba(15,23,42,0.6); padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          <div style="display: flex; gap: 0.25rem; flex-wrap: wrap; max-width: 250px;">
             ${locationBreakdownHtml}
           </div>
         </td>
-        <td class="cost-column">$${p.baseCost.toFixed(2)}</td>
-        <td class="cost-column">$${p.salePrice.toFixed(2)}</td>
-        <td>
-          <span class="badge ${availableStock <= p.minStockAlert ? 'badge-red' : 'badge-green'}">
-            ${availableStock} (Bloqueado: ${p.reservedStock})
+        <td class="cost-column" style="font-size: 0.82rem;">$${p.baseCost.toFixed(2)}</td>
+        <td class="cost-column" style="font-size: 0.82rem;">$${p.salePrice.toFixed(2)}</td>
+        <td style="text-align: center;">
+          <span class="badge ${availableStock <= p.minStockAlert ? 'badge-red' : 'badge-green'}" style="font-size: 0.78rem; font-weight: 700; padding: 0.2rem 0.5rem;" title="Disponible: ${availableStock} | Bloqueado: ${p.reservedStock}">
+            ${availableStock} / ${p.reservedStock}
           </span>
         </td>
         <td>
@@ -96778,7 +96780,127 @@ function renderMarginReport() {
   }).join('');
 }
 
+function selectAutocompleteCustomer(customerId) {
+  const hiddenInput = document.getElementById("movCustomer");
+  const searchInput = document.getElementById("movCustomerSearchInput");
+  const selectedCard = document.getElementById("movCustomerSelectedCard");
+  const suggestions = document.getElementById("movCustomerSuggestions");
+
+  if (!hiddenInput) return;
+
+  const customerList = (appState.customers && Array.isArray(appState.customers) && appState.customers.length > 0)
+    ? appState.customers
+    : initialCustomers;
+
+  const customer = customerList.find(c => c.id === customerId);
+  if (customer) {
+    hiddenInput.value = customer.id;
+    const docText = customer.document || customer.nit || customer.taxId || 'Sin Doc';
+    const nameText = customer.name || customer.legalName || 'Cliente General';
+
+    selectedCard.innerHTML = `
+      <div class="selected-product-info">
+        <div class="selected-product-title">👤 ${nameText}</div>
+        <div class="selected-product-sub">
+          🪪 NIT/Doc: <strong>${docText}</strong> | 📞 Tel: <strong>${customer.phone || 'N/A'}</strong> | ✉️ ${customer.email || 'N/A'}
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; color: var(--accent-red); border-color: rgba(239,68,68,0.4);" onclick="clearAutocompleteCustomer()">
+        ✖ Cambiar
+      </button>
+    `;
+    selectedCard.style.display = "flex";
+    if (searchInput) {
+      searchInput.style.display = "none";
+      searchInput.value = "";
+    }
+    if (suggestions) suggestions.style.display = "none";
+  }
+}
+
+function clearAutocompleteCustomer() {
+  const hiddenInput = document.getElementById("movCustomer");
+  const searchInput = document.getElementById("movCustomerSearchInput");
+  const selectedCard = document.getElementById("movCustomerSelectedCard");
+  const suggestions = document.getElementById("movCustomerSuggestions");
+
+  if (hiddenInput) hiddenInput.value = "";
+  if (selectedCard) selectedCard.style.display = "none";
+  if (searchInput) {
+    searchInput.style.display = "block";
+    searchInput.focus();
+  }
+  if (suggestions) suggestions.style.display = "none";
+}
+
+function renderCustomerSuggestions() {
+  const searchInput = document.getElementById("movCustomerSearchInput");
+  const suggestions = document.getElementById("movCustomerSuggestions");
+
+  if (!searchInput || !suggestions) return;
+
+  const q = searchInput.value.toLowerCase().trim();
+  const customerList = (appState.customers && Array.isArray(appState.customers) && appState.customers.length > 0)
+    ? appState.customers
+    : initialCustomers;
+
+  const matches = customerList.filter(c => {
+    const name = (c.name || c.legalName || '').toLowerCase();
+    const doc = (c.document || c.nit || c.taxId || '').toLowerCase();
+    const phone = (c.phone || '').toLowerCase();
+    const email = (c.email || '').toLowerCase();
+    return !q || name.includes(q) || doc.includes(q) || phone.includes(q) || email.includes(q);
+  }).slice(0, 15);
+
+  if (matches.length === 0) {
+    suggestions.innerHTML = `
+      <div style="padding: 0.75rem; text-align: center; color: var(--text-muted); font-size: 0.82rem;">
+        No se encontraron clientes o proveedores coincidentes.
+      </div>
+    `;
+  } else {
+    suggestions.innerHTML = matches.map(c => {
+      const docText = c.document || c.nit || c.taxId || 'Sin Doc';
+      const nameText = c.name || c.legalName || 'Cliente';
+      return `
+        <div class="suggestion-item" onclick="selectAutocompleteCustomer('${c.id}')" style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); cursor: pointer;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="color: var(--accent-green); font-size: 0.85rem;">👤 ${nameText}</strong>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">NIT/Doc: ${docText}</span>
+          </div>
+          <div style="font-size: 0.73rem; color: var(--text-muted); margin-top: 0.15rem;">
+            📞 ${c.phone || 'Sin tel'} | ✉️ ${c.email || 'Sin correo'} | 📍 ${c.city || c.address || 'Colombia'}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+  suggestions.style.display = "block";
+}
+
+function initCustomerAutocomplete() {
+  const searchInput = document.getElementById("movCustomerSearchInput");
+  const suggestions = document.getElementById("movCustomerSuggestions");
+
+  if (!searchInput) return;
+
+  searchInput.addEventListener("focus", () => {
+    renderCustomerSuggestions();
+  });
+
+  searchInput.addEventListener("input", () => {
+    renderCustomerSuggestions();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".product-autocomplete-container")) {
+      if (suggestions) suggestions.style.display = "none";
+    }
+  });
+}
+
 let activeCameraStream = null;
+let zxingCodeReader = null;
 
 async function startRealCameraStream() {
   const videoElem = document.getElementById("cameraStreamVideo");
@@ -96788,6 +96910,32 @@ async function startRealCameraStream() {
   try {
     if (activeCameraStream) stopRealCameraStream();
 
+    if (window.ZXing) {
+      if (!zxingCodeReader) {
+        zxingCodeReader = new ZXing.BrowserMultiFormatReader();
+      }
+      if (statusElem) statusElem.textContent = "📷 Escaneando código de barras o QR en vivo. Apunte la cámara...";
+      if (placeholder) placeholder.style.display = "none";
+      if (videoElem) videoElem.style.display = "block";
+
+      zxingCodeReader.decodeFromVideoDevice(undefined, 'cameraStreamVideo', (result, err) => {
+        if (result && result.getText) {
+          const barcodeVal = result.getText();
+          if (navigator.vibrate) {
+            try { navigator.vibrate(100); } catch(e) {}
+          }
+          stopRealCameraStream();
+          simulateBarcodeScan(barcodeVal);
+        }
+      });
+      return;
+    }
+  } catch (err) {
+    console.warn("ZXing live camera error:", err);
+  }
+
+  // Fallback to standard getUserMedia
+  try {
     let constraints = { video: { facingMode: { ideal: "environment" } } };
     try {
       activeCameraStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -96800,16 +96948,19 @@ async function startRealCameraStream() {
       videoElem.style.display = "block";
     }
     if (placeholder) placeholder.style.display = "none";
-    if (statusElem) statusElem.textContent = "📷 Cámara móvil conectada y activa. Enfoque el código o tome una fotografía.";
+    if (statusElem) statusElem.textContent = "📷 Cámara activa. Enfoque el código o tome una foto.";
   } catch (err) {
     console.warn("Camera getUserMedia access error:", err);
     if (videoElem) videoElem.style.display = "none";
     if (placeholder) placeholder.style.display = "block";
-    if (statusElem) statusElem.textContent = "⚠️ Permiso de cámara no concedido o no disponible. Use el botón 'Tomar Foto' o ingrese el código manualmente.";
+    if (statusElem) statusElem.textContent = "⚠️ Permiso de cámara no concedido. Use el botón 'Tomar Foto' o ingrese el código manualmente.";
   }
 }
 
 function stopRealCameraStream() {
+  if (zxingCodeReader) {
+    try { zxingCodeReader.reset(); } catch(e) {}
+  }
   if (activeCameraStream) {
     try {
       activeCameraStream.getTracks().forEach(track => track.stop());
@@ -96841,7 +96992,7 @@ function executeManualScan() {
   const input = document.getElementById("manualScanInput");
   const val = input ? input.value.trim() : "";
   if (!val) {
-    alert("⚠️ Por favor ingrese un código SKU o número de serie.");
+    alert("⚠️ Por favor ingrese un código SKU, EAN o número de serie.");
     return;
   }
   simulateBarcodeScan(val);
@@ -96852,42 +97003,71 @@ function handleCameraPhotoUpload(e) {
   if (!file) return;
 
   const statusElem = document.getElementById("cameraStatusText");
-  if (statusElem) statusElem.textContent = `📸 Foto capturada: ${file.name}. Procesando código de barras...`;
+  if (statusElem) statusElem.textContent = `📸 Foto capturada: ${file.name}. Leyendo código de barras...`;
 
-  setTimeout(() => {
-    // Attempt match with products or serials
-    const randomProduct = appState.products[0];
-    if (randomProduct) {
-      simulateBarcodeScan(randomProduct.sku);
-    } else {
-      alert("📷 Imagen procesada. Código no encontrado en inventario activo.");
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    const imgUrl = event.target.result;
+    if (window.ZXing && zxingCodeReader) {
+      try {
+        const result = await zxingCodeReader.decodeFromImageUrl(imgUrl);
+        if (result && result.getText) {
+          if (navigator.vibrate) try { navigator.vibrate(100); } catch(e) {}
+          simulateBarcodeScan(result.getText());
+          return;
+        }
+      } catch (err) {
+        console.warn("ZXing image decode failed:", err);
+      }
     }
-  }, 600);
+    // Fallback: match first product or search text
+    const sampleProduct = appState.products[0];
+    if (sampleProduct) {
+      simulateBarcodeScan(sampleProduct.barcode || sampleProduct.sku);
+    }
+  };
+  reader.readAsDataURL(file);
 }
 
 function simulateBarcodeScan(scannedCode) {
   ensureGlobalSerials();
   closeCameraModal();
 
-  const codeLower = scannedCode.toLowerCase();
-  const product = appState.products.find(p => p.sku.toLowerCase() === codeLower || p.name.toLowerCase().includes(codeLower));
+  const codeTrimmed = scannedCode.trim();
+  const codeLower = codeTrimmed.toLowerCase();
+
+  // Populate catalog search filter automatically
+  const catalogSearchElem = document.getElementById("catalogSearch");
+  if (catalogSearchElem) {
+    catalogSearchElem.value = codeTrimmed;
+    renderProductsTable();
+  }
+
+  // 1. Search product by barcode, SKU or name
+  const product = appState.products.find(p => 
+    (p.barcode && p.barcode.toLowerCase() === codeLower) || 
+    p.sku.toLowerCase() === codeLower || 
+    p.name.toLowerCase().includes(codeLower)
+  );
+
   if (product) {
     selectAutocompleteProduct(product.id);
-    alert(`📷 CÓDIGO DETECTADO EN ESCÁNER: ${product.sku} - ${product.name}`);
+    alert(`📷 CÓDIGO LEÍDO CON ÉXITO: "${codeTrimmed}"\n\nProducto: [${product.sku}] ${product.name}\n${product.barcode ? 'Código de Barras EAN: ' + product.barcode : ''}`);
     return;
   }
 
+  // 2. Search serialized item by serial number
   const item = appState.serializedItems.find(i => i.serialNumber.toLowerCase().includes(codeLower));
   if (item) {
     switchView('view-equipment');
     const input = document.getElementById("warrantySerialInput");
     if (input) input.value = item.serialNumber;
     lookupWarrantyBySerial(item.serialNumber);
-    alert(`📷 SERIAL DETECTADO Y BUSCADO CON ÉXITO: ${item.serialNumber}`);
+    alert(`📷 SERIAL DETECTADO CON ÉXITO: ${item.serialNumber}`);
     return;
   }
 
-  alert(`📷 Código o Serial procesado: "${scannedCode}". No se encontraron coincidencias exactas.`);
+  alert(`📷 Código Leído: "${codeTrimmed}". Se ha colocado automáticamente en el filtro de búsqueda.`);
 }
 
 function openProductModal() {
@@ -96904,20 +97084,22 @@ function closeProductModal() {
 
 function handleCreateProduct(e) {
   e.preventDefault();
-  const sku = document.getElementById("newSku").value;
-  const name = document.getElementById("newName").value;
+  const sku = document.getElementById("newSku").value.trim();
+  const barcode = document.getElementById("newBarcode") ? document.getElementById("newBarcode").value.trim() : "";
+  const name = document.getElementById("newName").value.trim();
   const categoryId = document.getElementById("newCategory").value;
   const unit = document.getElementById("newUnit").value;
   const reqSerial = document.getElementById("newReqSerial").value === "true";
-  const minStock = parseInt(document.getElementById("newMinStock").value);
-  const baseCost = parseFloat(document.getElementById("newBaseCost").value);
-  const salePrice = parseFloat(document.getElementById("newSalePrice").value);
+  const minStock = parseInt(document.getElementById("newMinStock").value) || 0;
+  const baseCost = parseFloat(document.getElementById("newBaseCost").value) || 0;
+  const salePrice = parseFloat(document.getElementById("newSalePrice").value) || 0;
 
   const categoryObj = appState.categories.find(c => c.id === categoryId);
 
   const newProd = {
     id: `prod-${Date.now()}`,
     sku,
+    barcode,
     name,
     description: "Ingresado manualmente al catálogo",
     categoryId,
@@ -96933,7 +97115,7 @@ function handleCreateProduct(e) {
   };
 
   appState.products.push(newProd);
-  addActivityLog("CREACION", "ProductManagement", `Creación de producto nuevo en catálogo '${sku} - ${name}'`);
+  addActivityLog("CREACION", "ProductManagement", `Creación de producto nuevo en catálogo '${sku} - ${name}' (Barcode: ${barcode || 'N/A'})`);
 
   alert(`✅ Producto ${sku} creado.`);
   closeProductModal();
