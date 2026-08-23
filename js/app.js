@@ -97383,6 +97383,8 @@ function openProductModal() {
     alert("🔒 Restricción RBAC: Solo Administradores y Superadministradores pueden registrar nuevos productos.");
     return;
   }
+  const reqSelect = document.getElementById("newReqSerial");
+  if (reqSelect) reqSelect.value = "false";
   document.getElementById("productModal").classList.add("active");
 }
 
@@ -98178,5 +98180,12 @@ function scanAndCheckTransferSerial() {
     } else {
       alert(`⚠️ El serial '${code}' no se encuentra disponible en la sede de origen seleccionada.`);
     }
+  });
+}
+
+// Enforce default requiresSerial = false for all catalog products on load
+if (appState && Array.isArray(appState.products)) {
+  appState.products.forEach(p => {
+    p.requiresSerial = false;
   });
 }
