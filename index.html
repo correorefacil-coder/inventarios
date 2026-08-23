@@ -395,14 +395,59 @@
           </div>
 
           <div class="panel">
-            <!-- Top Search & Sort Control Toolbar -->
+            <!-- Top Search, Filter & Sort Control Toolbar -->
             <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center;">
-              <div style="flex: 1; min-width: 280px; position: relative;">
-                <input type="text" id="catalogSearch" class="form-control" placeholder="🔍 Autocompletar por Nombre, Código SKU, Marca, Proveedor..." oninput="handleCatalogSearchInput()" autocomplete="off">
+              <div style="flex: 1; min-width: 250px; position: relative;">
+                <input type="text" id="catalogSearch" class="form-control" placeholder="🔍 Autocompletar por Nombre, SKU, Código de Barras, Marca..." oninput="handleCatalogSearchInput()" autocomplete="off">
                 <div id="catalogSearchDropdown" class="autocomplete-dropdown-list" style="display: none;"></div>
               </div>
+
+              <!-- Floating Multi-Filter Dropdown Button -->
+              <div class="filter-dropdown-container" style="position: relative;">
+                <button id="btnToggleCatalogFilters" class="btn btn-secondary" onclick="toggleCatalogFilterDropdown(event)" style="font-size: 0.85rem; padding: 0.45rem 0.85rem; display: flex; align-items: center; gap: 0.4rem;" title="Filtrar por Marcas, Proveedores, Categorías y Sedes">
+                  <span>🌪️</span> <strong>Filtros Avanzados</strong>
+                  <span id="activeFilterBadgeCount" class="badge badge-green" style="display: none; font-size: 0.7rem; padding: 0.1rem 0.35rem;">0</span>
+                  <span>▾</span>
+                </button>
+
+                <!-- Floating Dropdown Card for Filters -->
+                <div id="catalogFilterDropdownCard" class="filter-dropdown-card" onclick="event.stopPropagation()">
+                  <div class="filter-dropdown-header">
+                    <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-main);">Filtros Múltiples</div>
+                    <button type="button" class="btn btn-secondary" style="padding: 0.15rem 0.45rem; font-size: 0.72rem;" onclick="clearCatalogFilters()">
+                      🧹 Limpiar Todo
+                    </button>
+                  </div>
+
+                  <div class="filter-dropdown-body">
+                    <!-- Section 1: Marcas -->
+                    <div class="amazon-filter-group">
+                      <div class="amazon-filter-title">🏷️ Marcas / Fabricantes</div>
+                      <div class="amazon-checkbox-list" id="filterBrandList"></div>
+                    </div>
+
+                    <!-- Section 2: Proveedores -->
+                    <div class="amazon-filter-group">
+                      <div class="amazon-filter-title">🚚 Proveedor / Origen</div>
+                      <div class="amazon-checkbox-list" id="filterSupplierList"></div>
+                    </div>
+
+                    <!-- Section 3: Categorías -->
+                    <div class="amazon-filter-group">
+                      <div class="amazon-filter-title">📁 Categoría</div>
+                      <div class="amazon-checkbox-list" id="filterCategoryList"></div>
+                    </div>
+
+                    <!-- Section 4: Ubicaciones / Sedes -->
+                    <div class="amazon-filter-group">
+                      <div class="amazon-filter-title">📍 Sedes / Bodegas</div>
+                      <div class="amazon-checkbox-list" id="filterLocationList"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
               
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
                 <label for="catalogSortOrder" style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600; white-space: nowrap;">Ordenar por:</label>
                 <select id="catalogSortOrder" class="form-control" style="width: auto; font-size: 0.85rem;" onchange="renderCatalog()">
                   <option value="default">Relevancia / Destacados</option>
@@ -418,86 +463,27 @@
               </div>
             </div>
 
-            <!-- Amazon-Style Layout: Left Sidebar Multi-Filters + Right Catalog Table -->
-            <div class="amazon-catalog-layout">
-              <!-- Left Sidebar Multi-Filter Checkboxes -->
-              <aside class="amazon-sidebar">
-                <div class="amazon-filter-header">
-                  <h4>Filtros Múltiples</h4>
-                  <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" onclick="clearCatalogFilters()">
-                    🧹 Limpiar
-                  </button>
-                </div>
+            <!-- Dynamic Live Counter & Summary Bar -->
+            <div id="catalogCounterBadge" style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.8rem; padding: 0.6rem 0.85rem; background: rgba(15, 23, 42, 0.75); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.83rem;">
+              <!-- JS Rendered -->
+            </div>
 
-                <!-- Section 1: Marcas -->
-                <div class="amazon-filter-group">
-                  <div class="amazon-filter-title">
-                    <span>🏷️ Marcas / Fabricantes</span>
-                  </div>
-                  <div class="amazon-checkbox-list" id="filterBrandList">
-                    <!-- JS Rendered Checkboxes -->
-                  </div>
-                </div>
-
-                <!-- Section 2: Proveedores -->
-                <div class="amazon-filter-group">
-                  <div class="amazon-filter-title">
-                    <span>🚚 Proveedor / Origen</span>
-                  </div>
-                  <div class="amazon-checkbox-list" id="filterSupplierList">
-                    <!-- JS Rendered Checkboxes -->
-                  </div>
-                </div>
-
-                <!-- Section 3: Categorías -->
-                <div class="amazon-filter-group">
-                  <div class="amazon-filter-title">
-                    <span>📁 Categorías</span>
-                  </div>
-                  <div class="amazon-checkbox-list" id="filterCategoryList">
-                    <!-- JS Rendered Checkboxes -->
-                  </div>
-                </div>
-
-                <!-- Section 4: Sedes / Ubicaciones -->
-                <div class="amazon-filter-group">
-                  <div class="amazon-filter-title">
-                    <span>📍 Sedes / Bodegas</span>
-                  </div>
-                  <div class="amazon-checkbox-list" id="filterLocationList">
-                    <!-- JS Rendered Checkboxes -->
-                  </div>
-                </div>
-              </aside>
-
-              <!-- Main Right Panel -->
-              <div>
-                <!-- Dynamic Live Counter & Filter Summary Bar -->
-                <div id="catalogCounterBadge" style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.8rem; padding: 0.6rem 0.85rem; background: rgba(15, 23, 42, 0.75); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.83rem;">
-                  <!-- JS Rendered -->
-                </div>
-
-                <div class="table-responsive">
-                  <table class="custom-table">
-                    <thead>
-                      <tr>
-                        <th>SKU</th>
-                        <th>Nombre / Descripción</th>
-                        <th>Categoría</th>
-                        <th>Stock Total</th>
-                        <th>Desglose por Ubicación (Sedes)</th>
-                        <th class="cost-column">Costo Base</th>
-                        <th class="cost-column">Precio Venta</th>
-                        <th>Disponible / Bloqueado</th>
-                        <th>Acciones / Gestión</th>
-                      </tr>
-                    </thead>
-                    <tbody id="catalogTableBody">
-                      <!-- JS -->
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            <div class="table-responsive">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th style="width: 85px;">SKU</th>
+                    <th>Producto & Detalles</th>
+                    <th style="width: 270px;">Inventario & Sedes</th>
+                    <th class="cost-column" style="width: 100px;">Costo Base</th>
+                    <th class="cost-column" style="width: 100px;">Precio Venta</th>
+                    <th style="width: 120px; text-align: center;">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="catalogTableBody">
+                  <!-- JS -->
+                </tbody>
+              </table>
             </div>
           </div>
         </section>

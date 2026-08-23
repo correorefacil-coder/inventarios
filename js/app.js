@@ -93501,11 +93501,16 @@ function closeUserProfileDropdown() {
   }
 }
 
-// Close dropdown on outside click
+// Close dropdowns on outside click
 document.addEventListener("click", (e) => {
   const container = document.querySelector(".user-profile-menu-container");
   if (container && !container.contains(e.target)) {
     closeUserProfileDropdown();
+  }
+
+  const filterContainer = document.querySelector(".filter-dropdown-container");
+  if (filterContainer && !filterContainer.contains(e.target)) {
+    closeCatalogFilterDropdown();
   }
 });
 
@@ -96070,6 +96075,21 @@ function getSelectedCheckboxValues(selector) {
   return Array.from(document.querySelectorAll(selector + ':checked')).map(cb => cb.value);
 }
 
+function toggleCatalogFilterDropdown(e) {
+  if (e) e.stopPropagation();
+  const card = document.getElementById("catalogFilterDropdownCard");
+  if (card) {
+    card.classList.toggle("active");
+  }
+}
+
+function closeCatalogFilterDropdown() {
+  const card = document.getElementById("catalogFilterDropdownCard");
+  if (card) {
+    card.classList.remove("active");
+  }
+}
+
 function renderCatalog() {
   ensureProductLocations();
   const tableBody = document.getElementById("catalogTableBody");
@@ -96081,6 +96101,18 @@ function renderCatalog() {
   const selectedCategories = getSelectedCheckboxValues('.chk-category');
   const selectedLocations = getSelectedCheckboxValues('.chk-location');
 
+  // Update active filter badge counter on toolbar button
+  const totalActiveFilters = selectedBrands.length + selectedSuppliers.length + selectedCategories.length + selectedLocations.length;
+  const filterBadge = document.getElementById("activeFilterBadgeCount");
+  if (filterBadge) {
+    if (totalActiveFilters > 0) {
+      filterBadge.textContent = totalActiveFilters;
+      filterBadge.style.display = "inline-block";
+    } else {
+      filterBadge.style.display = "none";
+    }
+  }
+
   let filtered = appState.products.filter(p => {
     const { brand, supplier } = getProductBrandAndSupplier(p);
     const categoryObj = appState.categories.find(c => c.id === p.categoryId);
@@ -96091,6 +96123,7 @@ function renderCatalog() {
       p.name.toLowerCase().includes(searchQuery) ||
       brand.toLowerCase().includes(searchQuery) ||
       supplier.toLowerCase().includes(searchQuery) ||
+      (p.barcode && p.barcode.toLowerCase().includes(searchQuery)) ||
       (p.description && p.description.toLowerCase().includes(searchQuery));
 
     const matchesBrand = selectedBrands.length === 0 || selectedBrands.includes(brand);
@@ -96159,46 +96192,49 @@ function renderCatalog() {
     const categoryObj = appState.categories.find(c => c.id === p.categoryId);
     const categoryName = categoryObj ? categoryObj.name : p.category;
 
+    // Actual count of registered serial numbers in appState.serializedItems
+    const registeredSerialsCount = appState.serializedItems.filter(i => i.productId === p.id).length;
+
     // Build location breakdown pills
     const locationBreakdownHtml = appState.locations.map(loc => {
       const qty = (p.stockByLocation && p.stockByLocation[loc.id]) ? p.stockByLocation[loc.id] : 0;
       const shortLocName = loc.name.replace("Bodega Principal (Central)", "Central").replace("Punto de Venta Bogotá", "PV Bogotá").replace("Almacén Central Llanos", "Llanos");
-      return `<div style="font-size: 0.72rem; padding: 0.15rem 0.4rem; background: rgba(15,23,42,0.7); border: 1px solid var(--border-color); border-radius: 4px; display: inline-flex; align-items: center; gap: 0.2rem; white-space: nowrap;">
-        📍 <span>${shortLocName}:</span> <strong style="color: ${qty > 0 ? 'var(--accent-teal)' : 'var(--text-muted)'};">${qty}</strong>
-      </div>`;
-    }).join('');
+      return `<span style="font-size: 0.7rem; padding: 0.1rem 0.35rem; background: rgba(15,23,42,0.6); border: 1px solid var(--border-color); border-radius: 4px; display: inline-flex; align-items: center; gap: 0.2rem; white-space: nowrap;">
+        📍 ${shortLocName}: <strong style="color: ${qty > 0 ? 'var(--accent-teal)' : 'var(--text-muted)'};">${qty}</strong>
+      </span>`;
+    }).join(' ');
 
     return `
       <tr>
         <td><strong style="color: var(--accent-green); font-size: 0.85rem;">${p.sku}</strong></td>
         <td>
-          <div style="font-weight: 600; font-size: 0.85rem;">${p.name}</div>
-          <div style="font-size: 0.73rem; color: var(--text-muted);">${p.description || ''}</div>
+          <div style="font-weight: 600; font-size: 0.85rem; color: var(--text-main); margin-bottom: 0.15rem;">${p.name}</div>
+          <div style="font-size: 0.73rem; color: var(--text-muted); margin-bottom: 0.25rem;">${p.description || ''}</div>
+          <span class="badge badge-purple" style="font-size: 0.7rem; padding: 0.15rem 0.45rem;">${categoryName}</span>
         </td>
-        <td><span class="badge badge-purple" style="font-size: 0.72rem;">${categoryName}</span></td>
-        <td><span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); white-space: nowrap;">${p.physicalStock} ${p.unitOfMeasure}</span></td>
         <td>
-          <div style="display: flex; gap: 0.25rem; flex-wrap: wrap; max-width: 250px;">
+          <div style="font-size: 0.83rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+            <span>📦 Total: <strong>${p.physicalStock}</strong> ${p.unitOfMeasure}</span>
+            <span class="badge ${availableStock <= p.minStockAlert ? 'badge-red' : 'badge-green'}" style="font-size: 0.72rem; padding: 0.1rem 0.4rem;" title="Disponible: ${availableStock} | Bloqueado: ${p.reservedStock}">
+              ${availableStock} Disp / ${p.reservedStock} Bloq
+            </span>
+          </div>
+          <div style="display: flex; gap: 0.2rem; flex-wrap: wrap;">
             ${locationBreakdownHtml}
           </div>
         </td>
-        <td class="cost-column" style="font-size: 0.82rem;">$${p.baseCost.toFixed(2)}</td>
-        <td class="cost-column" style="font-size: 0.82rem;">$${p.salePrice.toFixed(2)}</td>
+        <td class="cost-column" style="font-size: 0.82rem; font-weight: 500;">$${p.baseCost.toFixed(2)}</td>
+        <td class="cost-column" style="font-size: 0.82rem; font-weight: 600; color: var(--accent-green);">$${p.salePrice.toFixed(2)}</td>
         <td style="text-align: center;">
-          <span class="badge ${availableStock <= p.minStockAlert ? 'badge-red' : 'badge-green'}" style="font-size: 0.78rem; font-weight: 700; padding: 0.2rem 0.5rem;" title="Disponible: ${availableStock} | Bloqueado: ${p.reservedStock}">
-            ${availableStock} / ${p.reservedStock}
-          </span>
-        </td>
-        <td>
-          <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
+          <div style="display: flex; gap: 0.3rem; justify-content: center; align-items: center; flex-wrap: wrap;">
             ${isAdminUser(appState.currentUser) ? `
-              <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.4); color: var(--accent-green);" onclick="openEditProductModal('${p.id}')" title="Editar producto e inventario">
+              <button class="btn btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.75rem; background: rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.4); color: var(--accent-green);" onclick="openEditProductModal('${p.id}')" title="Editar producto e inventario">
                 ✏️ Editar
               </button>
             ` : ''}
             ${isSerialized ? `
-              <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="openSerialInspectorModal('${p.id}')">
-                🔍 Seriales (${p.physicalStock})
+              <button class="btn btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.75rem;" onclick="openSerialInspectorModal('${p.id}')" title="Ver números de serie registrados">
+                🔍 Seriales (${registeredSerialsCount})
               </button>
             ` : (!isAdminUser(appState.currentUser) ? '-' : '')}
           </div>
