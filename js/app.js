@@ -93073,6 +93073,7 @@ function validatePasswordPolicy(password) {
 const systemUsers = [
   {
     id: "usr-super",
+    username: "superusuario",
     firstName: "Superusuario",
     lastName: "Gerencia",
     document: "0000000000",
@@ -93089,6 +93090,7 @@ const systemUsers = [
   },
   {
     id: "usr-leyla",
+    username: "leyla",
     firstName: "Leyla Caterine",
     lastName: "Bernal",
     document: "1020304050",
@@ -93687,48 +93689,90 @@ function checkAuthentication() {
 }
 
 async function handleLoginSubmit(event) {
-  event.preventDefault();
-  const emailInput = document.getElementById("loginEmail").value.trim().toLowerCase();
-  const passwordInput = document.getElementById("loginPassword").value;
+  if (event) event.preventDefault();
   const errorMsgBox = document.getElementById("loginErrorMessage");
-
-  let matchingUser = null;
-  for (const u of appState.users) {
-    if (u.email.toLowerCase() === emailInput) {
-      const isValid = await verifyPassword(passwordInput, u.password);
-      if (isValid) {
-        matchingUser = u;
-        break;
-      }
-    }
-  }
-
-  if (!matchingUser) {
-    if (errorMsgBox) {
-      errorMsgBox.textContent = "⚠️ Credenciales inválidas. Verifique el usuario (correo) y la contraseña.";
-      errorMsgBox.style.display = "block";
-    }
-    return;
-  }
-
-  if (!matchingUser.active) {
-    if (errorMsgBox) {
-      errorMsgBox.textContent = "🔴 Esta cuenta se encuentra desactivada. Contacte al Administrador.";
-      errorMsgBox.style.display = "block";
-    }
-    return;
-  }
-
   if (errorMsgBox) errorMsgBox.style.display = "none";
 
-  // Check if mandatory first login password change is required
-  if (matchingUser.mustChangePassword) {
-    pendingForceChangeUser = matchingUser;
-    document.getElementById("forcePasswordChangeModal").classList.add("active");
-    return;
-  }
+  try {
+    const rawInputElem = document.getElementById("loginEmail");
+    const rawPwdElem = document.getElementById("loginPassword");
+    const userInput = rawInputElem ? rawInputElem.value.trim().toLowerCase() : "";
+    const passwordInput = rawPwdElem ? rawPwdElem.value : "";
 
-  completeLoginProcess(matchingUser);
+    if (!userInput || !passwordInput) {
+      if (errorMsgBox) {
+        errorMsgBox.textContent = "⚠️ Por favor ingrese el usuario (o correo) y la contraseña.";
+        errorMsgBox.style.display = "block";
+      }
+      return;
+    }
+
+    const usersList = (appState.users && Array.isArray(appState.users) && appState.users.length > 0) 
+      ? appState.users 
+      : systemUsers;
+
+    let matchingUser = null;
+    for (const u of usersList) {
+      if (!u) continue;
+      const uEmail = (u.email || "").toLowerCase();
+      const uId = (u.id || "").toLowerCase();
+      const uFirstName = (u.firstName || "").toLowerCase();
+      const uLastName = (u.lastName || "").toLowerCase();
+      const uFullName = `${uFirstName} ${uLastName}`.trim();
+      const uUsername = (u.username || "").toLowerCase();
+
+      const isUserMatch = 
+        uEmail === userInput ||
+        uUsername === userInput ||
+        uId === userInput ||
+        uFirstName === userInput ||
+        uLastName === userInput ||
+        uFullName === userInput ||
+        (userInput === "mascampo@gmail.com" && uEmail === "mascmpo@gmail.com") ||
+        (userInput === "superusuario" && (uEmail === "gerencia@softproductiva.com" || uId === "usr-super"));
+
+      if (isUserMatch) {
+        const isValid = await verifyPassword(passwordInput, u.password);
+        if (isValid) {
+          matchingUser = u;
+          break;
+        }
+      }
+    }
+
+    if (!matchingUser) {
+      if (errorMsgBox) {
+        errorMsgBox.textContent = "⚠️ Credenciales inválidas. Verifique el usuario/correo y la contraseña.";
+        errorMsgBox.style.display = "block";
+      }
+      return;
+    }
+
+    if (!matchingUser.active) {
+      if (errorMsgBox) {
+        errorMsgBox.textContent = "🔴 Esta cuenta se encuentra desactivada. Contacte al Administrador.";
+        errorMsgBox.style.display = "block";
+      }
+      return;
+    }
+
+    if (errorMsgBox) errorMsgBox.style.display = "none";
+
+    if (matchingUser.mustChangePassword) {
+      pendingForceChangeUser = matchingUser;
+      const forceModal = document.getElementById("forcePasswordChangeModal");
+      if (forceModal) forceModal.classList.add("active");
+      return;
+    }
+
+    completeLoginProcess(matchingUser);
+  } catch (err) {
+    console.error("Login process error:", err);
+    if (errorMsgBox) {
+      errorMsgBox.textContent = "⚠️ Error al procesar el inicio de sesión: " + (err.message || err);
+      errorMsgBox.style.display = "block";
+    }
+  }
 }
 
 let pendingForceChangeUser = null;
