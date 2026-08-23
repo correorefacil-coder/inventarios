@@ -93388,7 +93388,33 @@ function ensureGlobalSerials() {
   // No automatic mock serial generation
 }
 
-// MOBILE DRAWER NAVIGATION CONTROLLER
+// SIDEBAR COLLAPSE & MOBILE DRAWER CONTROLLER
+function toggleSidebarOrDrawer() {
+  if (window.innerWidth > 900) {
+    // Desktop: toggle collapsed sidebar
+    const sidebar = document.querySelector(".sidebar");
+    if (sidebar) {
+      const isCollapsed = sidebar.classList.toggle("collapsed");
+      try {
+        localStorage.setItem("mascampo_sidebar_collapsed", isCollapsed ? "true" : "false");
+      } catch(e) {}
+    }
+  } else {
+    // Mobile: toggle overlay drawer
+    toggleMobileDrawer();
+  }
+}
+
+function initSidebarState() {
+  try {
+    const saved = localStorage.getItem("mascampo_sidebar_collapsed");
+    const sidebar = document.querySelector(".sidebar");
+    if (saved === "true" && sidebar && window.innerWidth > 900) {
+      sidebar.classList.add("collapsed");
+    }
+  } catch(e) {}
+}
+
 function toggleMobileDrawer() {
   const overlay = document.getElementById("mobileDrawerOverlay");
   const drawer = document.getElementById("mobileDrawer");
@@ -94031,6 +94057,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initMovementProductAutocomplete();
   initCustomerAutocomplete();
   initInactivityListeners();
+  initSidebarState();
   checkAuthentication();
   renderAllViews();
 
