@@ -56,7 +56,7 @@
     <div class="login-card">
       <h2 class="login-title">Iniciar Sesión</h2>
 
-      <form id="loginForm" onsubmit="handleLoginSubmit(event)">
+      <form id="loginForm" onsubmit="event.preventDefault(); handleLoginSubmit(event);" action="javascript:void(0);">
         <div class="login-field">
           <label class="login-label" for="loginEmail">Usuario / Correo Electrónico:</label>
           <input type="text" id="loginEmail" class="login-input" required autocomplete="username" placeholder="Ej: gerencia@softproductiva.com o superusuario">

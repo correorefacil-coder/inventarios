@@ -95525,17 +95525,6 @@ function renderMovementProductSuggestions() {
       </button>
     </div>
   `;
-          <option value="sku_asc" ${sort === 'sku_asc' ? 'selected' : ''}>SKU (A-Z)</option>
-          <option value="sku_desc" ${sort === 'sku_desc' ? 'selected' : ''}>SKU (Z-A)</option>
-          <option value="name_asc" ${sort === 'name_asc' ? 'selected' : ''}>Nombre (A-Z)</option>
-          <option value="stock_desc" ${sort === 'stock_desc' ? 'selected' : ''}>Stock (Mayor)</option>
-        </select>
-      </div>
-      <button type="button" class="btn btn-secondary" style="padding: 0.15rem 0.45rem; font-size: 0.7rem; background: rgba(16,185,129,0.2); border-color: var(--accent-green); color: var(--accent-green);" onclick="openProductSelectorModal()">
-        ⚡ Ver Modal
-      </button>
-    </div>
-  `;
 
   let itemsHtml = '';
   if (matches.length === 0) {
