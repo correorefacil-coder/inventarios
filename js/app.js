@@ -93827,6 +93827,8 @@ document.addEventListener("DOMContentLoaded", () => {
   initRoleSwitcher();
   initNavigation();
   populateDropdowns();
+  populateAmazonSidebarFilters();
+  initMovementProductAutocomplete();
   checkAuthentication();
   renderAllViews();
 
@@ -94090,6 +94092,8 @@ function populateDropdowns() {
       return `<option value="${item.id}">${item.serialNumber} - ${prod ? prod.name : 'Equipo'} (${item.status})</option>`;
     }).join('');
   }
+
+  populateAmazonSidebarFilters();
 }
 
 function renderAllViews() {
@@ -95209,25 +95213,315 @@ function renderDashboard() {
   }).join('');
 }
 
+function getProductBrandAndSupplier(p) {
+  let brand = p.brand || "";
+  let supplier = p.supplier || p.provider || "";
+
+  if (!brand && p.description) {
+    const match = p.description.match(/Marca:\s*([^|]+)/i);
+    if (match) brand = match[1].trim();
+  }
+  if (!supplier && p.description) {
+    const match = p.description.match(/Prov:\s*([^|]+)/i);
+    if (match) supplier = match[1].trim();
+  }
+
+  return {
+    brand: brand || "General",
+    supplier: supplier || "Nacional / Directo"
+  };
+}
+
+function selectAutocompleteProduct(prodId) {
+  const hiddenInput = document.getElementById("movProduct");
+  const searchInput = document.getElementById("movProductSearchInput");
+  const selectedCard = document.getElementById("movProductSelectedCard");
+  const suggestions = document.getElementById("movProductSuggestions");
+
+  if (!hiddenInput) return;
+
+  const product = appState.products.find(p => p.id === prodId);
+  if (product) {
+    hiddenInput.value = product.id;
+    const { brand, supplier } = getProductBrandAndSupplier(product);
+    const avail = product.physicalStock - product.reservedStock;
+
+    selectedCard.innerHTML = `
+      <div class="selected-product-info">
+        <div class="selected-product-title">📦 ${product.sku} - ${product.name}</div>
+        <div class="selected-product-sub">
+          🏷️ Marca: <strong>${brand}</strong> | 🚚 Prov: <strong>${supplier}</strong> | 📦 Stock: <strong>${product.physicalStock} ${product.unitOfMeasure}</strong> (Disp: <strong>${avail}</strong>)
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; color: var(--accent-red); border-color: rgba(239,68,68,0.4);" onclick="clearAutocompleteProduct()">
+        ✖ Cambiar
+      </button>
+    `;
+    selectedCard.style.display = "flex";
+    if (searchInput) {
+      searchInput.style.display = "none";
+      searchInput.value = "";
+    }
+    if (suggestions) suggestions.style.display = "none";
+
+    handleProductSelectForMovement();
+  }
+}
+
+function clearAutocompleteProduct() {
+  const hiddenInput = document.getElementById("movProduct");
+  const searchInput = document.getElementById("movProductSearchInput");
+  const selectedCard = document.getElementById("movProductSelectedCard");
+  const suggestions = document.getElementById("movProductSuggestions");
+
+  if (hiddenInput) hiddenInput.value = "";
+  if (selectedCard) selectedCard.style.display = "none";
+  if (searchInput) {
+    searchInput.style.display = "block";
+    searchInput.focus();
+  }
+  if (suggestions) suggestions.style.display = "none";
+
+  handleProductSelectForMovement();
+}
+
+function initMovementProductAutocomplete() {
+  const searchInput = document.getElementById("movProductSearchInput");
+  const dropdown = document.getElementById("movProductSuggestions");
+  if (!searchInput || !dropdown) return;
+
+  const handleSearch = () => {
+    const query = searchInput.value.toLowerCase().trim();
+    if (!query) {
+      dropdown.style.display = "none";
+      return;
+    }
+
+    const matches = appState.products.filter(p => {
+      const { brand, supplier } = getProductBrandAndSupplier(p);
+      return p.sku.toLowerCase().includes(query) ||
+             p.name.toLowerCase().includes(query) ||
+             brand.toLowerCase().includes(query) ||
+             supplier.toLowerCase().includes(query) ||
+             (p.description && p.description.toLowerCase().includes(query));
+    }).slice(0, 12);
+
+    if (matches.length === 0) {
+      dropdown.innerHTML = `
+        <div style="padding: 0.75rem; text-align: center; color: var(--text-muted); font-size: 0.82rem;">
+          No se encontraron productos coincidentes para "${query}"
+        </div>
+      `;
+      dropdown.style.display = "block";
+      return;
+    }
+
+    dropdown.innerHTML = matches.map(p => {
+      const { brand, supplier } = getProductBrandAndSupplier(p);
+      const avail = p.physicalStock - p.reservedStock;
+      return `
+        <div class="autocomplete-suggestion-item" onclick="selectAutocompleteProduct('${p.id}')">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.15rem;">
+            <strong style="color: var(--accent-green); font-family: monospace; font-size: 0.85rem;">${p.sku}</strong>
+            <span class="badge ${avail > 0 ? 'badge-green' : 'badge-red'}" style="font-size: 0.7rem;">Stock: ${p.physicalStock} (${avail} disp)</span>
+          </div>
+          <div style="font-weight: 600; font-size: 0.88rem; color: var(--text-main);">${p.name}</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem;">
+            🏷️ Marca: ${brand} | 🚚 Prov: ${supplier}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    dropdown.style.display = "block";
+  };
+
+  searchInput.addEventListener("input", handleSearch);
+  searchInput.addEventListener("focus", () => {
+    if (searchInput.value.trim()) handleSearch();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.style.display = "none";
+    }
+  });
+}
+
+function handleCatalogSearchInput() {
+  const searchInput = document.getElementById("catalogSearch");
+  const dropdown = document.getElementById("catalogSearchDropdown");
+  renderCatalog();
+
+  if (!searchInput || !dropdown) return;
+  const query = searchInput.value.toLowerCase().trim();
+  if (!query) {
+    dropdown.style.display = "none";
+    return;
+  }
+
+  const matches = appState.products.filter(p => {
+    const { brand, supplier } = getProductBrandAndSupplier(p);
+    return p.sku.toLowerCase().includes(query) ||
+           p.name.toLowerCase().includes(query) ||
+           brand.toLowerCase().includes(query) ||
+           supplier.toLowerCase().includes(query);
+  }).slice(0, 8);
+
+  if (matches.length === 0) {
+    dropdown.style.display = "none";
+    return;
+  }
+
+  dropdown.innerHTML = matches.map(p => {
+    const { brand, supplier } = getProductBrandAndSupplier(p);
+    return `
+      <div class="autocomplete-suggestion-item" onclick="selectCatalogSearchSuggestion('${p.sku}')">
+        <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+          <strong style="color: var(--accent-green);">${p.sku}</strong>
+          <span style="color: var(--text-muted);">${brand}</span>
+        </div>
+        <div style="font-weight: 600; font-size: 0.85rem;">${p.name}</div>
+      </div>
+    `;
+  }).join('');
+
+  dropdown.style.display = "block";
+}
+
+function selectCatalogSearchSuggestion(sku) {
+  const searchInput = document.getElementById("catalogSearch");
+  const dropdown = document.getElementById("catalogSearchDropdown");
+  if (searchInput) searchInput.value = sku;
+  if (dropdown) dropdown.style.display = "none";
+  renderCatalog();
+}
+
+function populateAmazonSidebarFilters() {
+  const brandListContainer = document.getElementById("filterBrandList");
+  const supplierListContainer = document.getElementById("filterSupplierList");
+  const categoryListContainer = document.getElementById("filterCategoryList");
+  const locationListContainer = document.getElementById("filterLocationList");
+
+  if (!brandListContainer) return;
+
+  const brandCounts = {};
+  const supplierCounts = {};
+  const categoryCounts = {};
+
+  appState.products.forEach(p => {
+    const { brand, supplier } = getProductBrandAndSupplier(p);
+    brandCounts[brand] = (brandCounts[brand] || 0) + 1;
+    supplierCounts[supplier] = (supplierCounts[supplier] || 0) + 1;
+
+    const categoryObj = appState.categories.find(c => c.id === p.categoryId);
+    const catName = categoryObj ? categoryObj.name : (p.category || "General");
+    categoryCounts[catName] = (categoryCounts[catName] || 0) + 1;
+  });
+
+  brandListContainer.innerHTML = Object.keys(brandCounts).sort().map(b => `
+    <label class="amazon-checkbox-item">
+      <input type="checkbox" class="amazon-filter-chk chk-brand" value="${b}" onchange="renderCatalog()">
+      <span>${b}</span>
+      <span class="amazon-count-badge">(${brandCounts[b]})</span>
+    </label>
+  `).join('');
+
+  supplierListContainer.innerHTML = Object.keys(supplierCounts).sort().map(s => `
+    <label class="amazon-checkbox-item">
+      <input type="checkbox" class="amazon-filter-chk chk-supplier" value="${s}" onchange="renderCatalog()">
+      <span>${s}</span>
+      <span class="amazon-count-badge">(${supplierCounts[s]})</span>
+    </label>
+  `).join('');
+
+  categoryListContainer.innerHTML = Object.keys(categoryCounts).sort().map(c => `
+    <label class="amazon-checkbox-item">
+      <input type="checkbox" class="amazon-filter-chk chk-category" value="${c}" onchange="renderCatalog()">
+      <span>${c}</span>
+      <span class="amazon-count-badge">(${categoryCounts[c]})</span>
+    </label>
+  `).join('');
+
+  locationListContainer.innerHTML = appState.locations.map(loc => `
+    <label class="amazon-checkbox-item">
+      <input type="checkbox" class="amazon-filter-chk chk-location" value="${loc.id}" onchange="renderCatalog()">
+      <span>${loc.name}</span>
+    </label>
+  `).join('');
+}
+
+function clearCatalogFilters() {
+  document.querySelectorAll('.amazon-filter-chk').forEach(chk => chk.checked = false);
+  const searchInput = document.getElementById("catalogSearch");
+  const sortSelect = document.getElementById("catalogSortOrder");
+  const dropdown = document.getElementById("catalogSearchDropdown");
+  if (searchInput) searchInput.value = "";
+  if (sortSelect) sortSelect.value = "default";
+  if (dropdown) dropdown.style.display = "none";
+  renderCatalog();
+}
+
+function getSelectedCheckboxValues(selector) {
+  return Array.from(document.querySelectorAll(selector + ':checked')).map(cb => cb.value);
+}
+
 function renderCatalog() {
   ensureProductLocations();
   const tableBody = document.getElementById("catalogTableBody");
-  const searchQuery = (document.getElementById("catalogSearch")?.value || "").toLowerCase();
-  const categoryFilter = document.getElementById("catalogCategoryFilter")?.value || "ALL";
-  const locationFilter = document.getElementById("catalogLocationFilter")?.value || "ALL";
+  const searchQuery = (document.getElementById("catalogSearch")?.value || "").toLowerCase().trim();
+  const sortOrder = document.getElementById("catalogSortOrder")?.value || "default";
 
-  const filtered = appState.products.filter(p => {
-    const matchesSearch = p.sku.toLowerCase().includes(searchQuery) || p.name.toLowerCase().includes(searchQuery);
-    const matchesCategory = (categoryFilter === "ALL" || p.categoryId === categoryFilter);
-    
+  const selectedBrands = getSelectedCheckboxValues('.chk-brand');
+  const selectedSuppliers = getSelectedCheckboxValues('.chk-supplier');
+  const selectedCategories = getSelectedCheckboxValues('.chk-category');
+  const selectedLocations = getSelectedCheckboxValues('.chk-location');
+
+  let filtered = appState.products.filter(p => {
+    const { brand, supplier } = getProductBrandAndSupplier(p);
+    const categoryObj = appState.categories.find(c => c.id === p.categoryId);
+    const catName = categoryObj ? categoryObj.name : (p.category || "General");
+
+    const matchesSearch = !searchQuery || 
+      p.sku.toLowerCase().includes(searchQuery) || 
+      p.name.toLowerCase().includes(searchQuery) ||
+      brand.toLowerCase().includes(searchQuery) ||
+      supplier.toLowerCase().includes(searchQuery) ||
+      (p.description && p.description.toLowerCase().includes(searchQuery));
+
+    const matchesBrand = selectedBrands.length === 0 || selectedBrands.includes(brand);
+    const matchesSupplier = selectedSuppliers.length === 0 || selectedSuppliers.includes(supplier);
+    const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(catName);
+
     let matchesLocation = true;
-    if (locationFilter !== "ALL") {
-      const stockInLoc = (p.stockByLocation && p.stockByLocation[locationFilter]) ? p.stockByLocation[locationFilter] : 0;
-      matchesLocation = stockInLoc > 0;
+    if (selectedLocations.length > 0) {
+      matchesLocation = selectedLocations.some(locId => {
+        const stockInLoc = (p.stockByLocation && p.stockByLocation[locId]) ? p.stockByLocation[locId] : 0;
+        return stockInLoc > 0;
+      });
     }
 
-    return matchesSearch && matchesCategory && matchesLocation;
+    return matchesSearch && matchesBrand && matchesSupplier && matchesCategory && matchesLocation;
   });
+
+  // Apply Sorting
+  if (sortOrder === "name_asc") {
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sortOrder === "name_desc") {
+    filtered.sort((a, b) => b.name.localeCompare(a.name));
+  } else if (sortOrder === "sku_asc") {
+    filtered.sort((a, b) => a.sku.localeCompare(b.sku, undefined, { numeric: true }));
+  } else if (sortOrder === "sku_desc") {
+    filtered.sort((a, b) => b.sku.localeCompare(a.sku, undefined, { numeric: true }));
+  } else if (sortOrder === "stock_desc") {
+    filtered.sort((a, b) => (b.physicalStock - b.reservedStock) - (a.physicalStock - a.reservedStock));
+  } else if (sortOrder === "stock_asc") {
+    filtered.sort((a, b) => (a.physicalStock - a.reservedStock) - (b.physicalStock - b.reservedStock));
+  } else if (sortOrder === "price_desc") {
+    filtered.sort((a, b) => b.salePrice - a.salePrice);
+  } else if (sortOrder === "price_asc") {
+    filtered.sort((a, b) => a.salePrice - b.salePrice);
+  }
 
   // Update live dynamic counter badge bar
   const counterContainer = document.getElementById("catalogCounterBadge");

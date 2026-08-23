@@ -1075,3 +1075,164 @@ body {
   text-align: center;
   font-weight: 500;
 }
+
+/* ==========================================================================
+   PRODUCT AUTOCOMPLETE & AMAZON MULTI-FILTER SIDEBAR STYLES
+   ========================================================================== */
+
+.product-autocomplete-container {
+  position: relative;
+  width: 100%;
+}
+
+.autocomplete-dropdown-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-green);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  z-index: 1050;
+  backdrop-filter: blur(16px);
+}
+
+.autocomplete-suggestion-item {
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background 0.15s ease, padding-left 0.15s ease;
+}
+
+.autocomplete-suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.autocomplete-suggestion-item:hover, .autocomplete-suggestion-item.active {
+  background: rgba(16, 185, 129, 0.18);
+  padding-left: 1.1rem;
+}
+
+.selected-product-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.85rem;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid var(--accent-green);
+  border-radius: var(--radius-md);
+  margin-top: 0.4rem;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.selected-product-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.selected-product-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-main);
+}
+
+.selected-product-sub {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+/* Amazon-style Catalog Layout */
+.amazon-catalog-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 950px) {
+  .amazon-catalog-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.amazon-sidebar {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.amazon-filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 0.85rem;
+}
+
+.amazon-filter-header h4 {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.amazon-filter-group {
+  margin-bottom: 1.1rem;
+}
+
+.amazon-filter-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-green);
+  margin-bottom: 0.45rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.amazon-checkbox-list {
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-right: 0.2rem;
+}
+
+.amazon-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: var(--text-main);
+  cursor: pointer;
+  padding: 0.2rem 0.3rem;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s ease;
+}
+
+.amazon-checkbox-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.amazon-checkbox-item input[type="checkbox"] {
+  accent-color: var(--accent-green);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.amazon-count-badge {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-left: auto;
+}
