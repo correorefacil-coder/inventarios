@@ -94806,42 +94806,33 @@ function renderUsers() {
 
     return `
       <tr>
-        <td><strong style="font-family: monospace; color: var(--accent-green);">${docDisplay}</strong></td>
-        <td>
-          <div style="font-weight: 600; color: var(--text-main);">${fullName} ${isSuperAccount ? '👑' : ''}</div>
-          <div style="font-size: 0.73rem; color: var(--text-muted);">ID: ${u.id}</div>
+        <td style="padding: 0.4rem 0.5rem; font-size: 0.8rem;"><strong style="font-family: monospace; color: var(--accent-green);">${docDisplay}</strong></td>
+        <td style="padding: 0.4rem 0.5rem;">
+          <div style="font-weight: 600; color: var(--text-main); font-size: 0.82rem;">${fullName} ${isSuperAccount ? '👑' : ''}</div>
+          <div style="font-size: 0.7rem; color: var(--text-muted);">ID: ${u.id}</div>
         </td>
-        <td><strong>${u.email}</strong></td>
-        <td>
-          <div style="font-size: 0.85rem;">📞 ${phoneDisplay}</div>
-          <div style="font-size: 0.75rem; color: var(--text-muted);">🏠 ${addressDisplay}</div>
+        <td style="padding: 0.4rem 0.5rem; font-size: 0.8rem;"><strong>${u.email}</strong></td>
+        <td style="padding: 0.4rem 0.5rem;">
+          <div style="font-size: 0.78rem;">📞 ${phoneDisplay}</div>
+          <div style="font-size: 0.72rem; color: var(--text-muted);">🏠 ${addressDisplay}</div>
         </td>
-        <td>
-          <span class="badge badge-purple">${vincDisplay}</span>
+        <td style="padding: 0.4rem 0.5rem;">
+          <span class="badge badge-purple" style="font-size: 0.7rem; padding: 0.15rem 0.35rem;">${vincDisplay}</span>
         </td>
-        <td>
-          <span class="badge ${roleClass}">
+        <td style="padding: 0.4rem 0.5rem;">
+          <span class="badge ${roleClass}" style="font-size: 0.7rem; padding: 0.15rem 0.35rem;">
             ${u.role}
           </span>
         </td>
-        <td>
-          <span class="badge ${u.active ? 'badge-green' : 'badge-red'}">
-            ${isSuperAccount ? '👑 Activo Vitalicio' : (u.active ? '🟢 Activo' : '🔴 Desactivo')}
+        <td style="padding: 0.4rem 0.5rem;">
+          <span class="badge ${u.active ? 'badge-green' : 'badge-red'}" style="font-size: 0.7rem; padding: 0.15rem 0.35rem;">
+            ${isSuperAccount ? '👑 Vitalicio' : (u.active ? '🟢 Activo' : '🔴 Inactivo')}
           </span>
         </td>
-        <td>
-          <div style="display: flex; gap: 0.3rem; align-items: center;">
-            <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.73rem;" onclick="openUserModal('${u.id}')">
-              ✏️ Editar
-            </button>
-            ${isSuperAccount ? `
-              <span class="badge badge-purple" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;" title="Cuenta de Infraestructura Inmutable">🔒 Vitalicio</span>
-            ` : `
-              <button class="btn ${u.active ? 'btn-danger' : 'btn-primary'}" style="padding: 0.2rem 0.5rem; font-size: 0.73rem;" onclick="toggleUserStatus('${u.id}')">
-                ${u.active ? '🔴 Desactivar' : '🟢 Activar'}
-              </button>
-            `}
-          </div>
+        <td style="padding: 0.4rem 0.5rem; text-align: center;">
+          <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.73rem;" onclick="openUserModal('${u.id}')">
+            ✏️ Editar
+          </button>
         </td>
       </tr>
     `;
