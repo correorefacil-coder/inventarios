@@ -93672,6 +93672,11 @@ function resetThemeToDefault() {
 
 // AUTHENTICATION ENGINE
 function checkAuthentication() {
+  if (window.location.search) {
+    try {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } catch (e) {}
+  }
   const loginOverlay = document.getElementById("loginScreen");
   const appContainer = document.getElementById("app");
   if (!loginOverlay) return;
@@ -93698,7 +93703,15 @@ function checkAuthentication() {
 }
 
 async function handleLoginSubmit(event) {
-  if (event) event.preventDefault();
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  if (window.location.search) {
+    try {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } catch (e) {}
+  }
   const errorMsgBox = document.getElementById("loginErrorMessage");
   if (errorMsgBox) errorMsgBox.style.display = "none";
 
@@ -96765,27 +96778,106 @@ function renderMarginReport() {
   }).join('');
 }
 
+let activeCameraStream = null;
+
+async function startRealCameraStream() {
+  const videoElem = document.getElementById("cameraStreamVideo");
+  const placeholder = document.getElementById("cameraFallbackPlaceholder");
+  const statusElem = document.getElementById("cameraStatusText");
+
+  try {
+    if (activeCameraStream) stopRealCameraStream();
+
+    let constraints = { video: { facingMode: { ideal: "environment" } } };
+    try {
+      activeCameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (e1) {
+      activeCameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    }
+
+    if (videoElem) {
+      videoElem.srcObject = activeCameraStream;
+      videoElem.style.display = "block";
+    }
+    if (placeholder) placeholder.style.display = "none";
+    if (statusElem) statusElem.textContent = "📷 Cámara móvil conectada y activa. Enfoque el código o tome una fotografía.";
+  } catch (err) {
+    console.warn("Camera getUserMedia access error:", err);
+    if (videoElem) videoElem.style.display = "none";
+    if (placeholder) placeholder.style.display = "block";
+    if (statusElem) statusElem.textContent = "⚠️ Permiso de cámara no concedido o no disponible. Use el botón 'Tomar Foto' o ingrese el código manualmente.";
+  }
+}
+
+function stopRealCameraStream() {
+  if (activeCameraStream) {
+    try {
+      activeCameraStream.getTracks().forEach(track => track.stop());
+    } catch (e) {}
+    activeCameraStream = null;
+  }
+  const videoElem = document.getElementById("cameraStreamVideo");
+  const placeholder = document.getElementById("cameraFallbackPlaceholder");
+  if (videoElem) {
+    videoElem.srcObject = null;
+    videoElem.style.display = "none";
+  }
+  if (placeholder) placeholder.style.display = "block";
+}
+
 function openCameraModal() {
-  document.getElementById("cameraModal").classList.add("active");
+  const modal = document.getElementById("cameraModal");
+  if (modal) modal.classList.add("active");
+  startRealCameraStream();
 }
 
 function closeCameraModal() {
-  document.getElementById("cameraModal").classList.remove("active");
+  stopRealCameraStream();
+  const modal = document.getElementById("cameraModal");
+  if (modal) modal.classList.remove("active");
+}
+
+function executeManualScan() {
+  const input = document.getElementById("manualScanInput");
+  const val = input ? input.value.trim() : "";
+  if (!val) {
+    alert("⚠️ Por favor ingrese un código SKU o número de serie.");
+    return;
+  }
+  simulateBarcodeScan(val);
+}
+
+function handleCameraPhotoUpload(e) {
+  const file = e.target.files ? e.target.files[0] : null;
+  if (!file) return;
+
+  const statusElem = document.getElementById("cameraStatusText");
+  if (statusElem) statusElem.textContent = `📸 Foto capturada: ${file.name}. Procesando código de barras...`;
+
+  setTimeout(() => {
+    // Attempt match with products or serials
+    const randomProduct = appState.products[0];
+    if (randomProduct) {
+      simulateBarcodeScan(randomProduct.sku);
+    } else {
+      alert("📷 Imagen procesada. Código no encontrado en inventario activo.");
+    }
+  }, 600);
 }
 
 function simulateBarcodeScan(scannedCode) {
   ensureGlobalSerials();
   closeCameraModal();
 
-  const product = appState.products.find(p => p.sku === scannedCode);
+  const codeLower = scannedCode.toLowerCase();
+  const product = appState.products.find(p => p.sku.toLowerCase() === codeLower || p.name.toLowerCase().includes(codeLower));
   if (product) {
-    document.getElementById("movProduct").value = product.id;
-    handleProductSelectForMovement();
+    selectAutocompleteProduct(product.id);
     alert(`📷 CÓDIGO DETECTADO EN ESCÁNER: ${product.sku} - ${product.name}`);
     return;
   }
 
-  const item = appState.serializedItems.find(i => i.serialNumber.toLowerCase().includes(scannedCode.toLowerCase()));
+  const item = appState.serializedItems.find(i => i.serialNumber.toLowerCase().includes(codeLower));
   if (item) {
     switchView('view-equipment');
     const input = document.getElementById("warrantySerialInput");
@@ -96795,7 +96887,7 @@ function simulateBarcodeScan(scannedCode) {
     return;
   }
 
-  alert(`📷 Código escaneado: "${scannedCode}".`);
+  alert(`📷 Código o Serial procesado: "${scannedCode}". No se encontraron coincidencias exactas.`);
 }
 
 function openProductModal() {

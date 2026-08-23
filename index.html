@@ -56,7 +56,7 @@
     <div class="login-card">
       <h2 class="login-title">Iniciar Sesión</h2>
 
-      <form id="loginForm" onsubmit="event.preventDefault(); handleLoginSubmit(event);" action="javascript:void(0);">
+      <form id="loginForm" onsubmit="handleLoginSubmit(event); return false;">
         <div class="login-field">
           <label class="login-label" for="loginEmail">Usuario / Correo Electrónico:</label>
           <input type="text" id="loginEmail" class="login-input" required autocomplete="username" placeholder="Ej: gerencia@softproductiva.com o superusuario">
@@ -1203,28 +1203,40 @@
 
     <!-- Camera Modal Overlay -->
     <div id="cameraModal" class="modal-overlay">
-      <div class="modal-content">
+      <div class="modal-content" style="max-width: 520px; width: 95%;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <h3 style="font-size: 1.1rem; font-weight: 700;">Lector de Código de Barras por Cámara</h3>
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-main);">📷 Escáner de Cámara Móvil</h3>
           <button class="btn btn-secondary" onclick="closeCameraModal()" style="padding: 0.2rem 0.6rem;">✕</button>
         </div>
-        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem;">Apunte la cámara hacia el código o serial impreso en el equipo o caja.</p>
+        <p id="cameraStatusText" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem;">Apunte la cámara hacia el código de barras o código QR impreso en el equipo o caja.</p>
         
-        <div class="camera-preview-box">
-          <div class="scanner-laser"></div>
-          <div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 1rem;">
-            [ Stream de Cámara Móvil Activo ]<br>
-            <span style="font-size: 0.75rem; color: var(--accent-green);">Escaneando número de serie de bodega...</span>
+        <div class="camera-preview-box" style="position: relative; overflow: hidden; background: #0f172a; border-radius: var(--radius-md); min-height: 220px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-color);">
+          <video id="cameraStreamVideo" autoplay playsinline style="width: 100%; height: 220px; object-fit: cover; display: none;"></video>
+          <div id="cameraFallbackPlaceholder" style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 1.5rem;">
+            📷 <strong>Cámara Móvil</strong><br>
+            <span style="font-size: 0.78rem; color: var(--text-muted);">Haga clic en 'Tomar Foto' o active la cámara en vivo</span>
           </div>
+          <div class="scanner-laser"></div>
         </div>
 
-        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-          <button class="btn btn-primary" style="flex: 1; min-width: 140px;" onclick="simulateBarcodeScan('006')">
-            Escaneo Serial 006 (MC 003)
-          </button>
-          <button class="btn btn-secondary" style="flex: 1; min-width: 140px;" onclick="simulateBarcodeScan('MC 574')">
-            Escaneo Ecógrafo S1
-          </button>
+        <div style="margin-top: 0.8rem; display: flex; flex-direction: column; gap: 0.5rem;">
+          <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+            <button type="button" class="btn btn-primary" style="flex: 1; min-width: 150px;" onclick="document.getElementById('cameraFileInput').click()">
+              📸 Tomar Foto / Capturar
+            </button>
+            <input type="file" accept="image/*" capture="environment" id="cameraFileInput" onchange="handleCameraPhotoUpload(event)" style="display: none;">
+            
+            <button type="button" class="btn btn-secondary" style="flex: 1; min-width: 140px;" onclick="startRealCameraStream()">
+              ⚡ Activar Cámara
+            </button>
+          </div>
+
+          <div style="display: flex; gap: 0.4rem; align-items: center; margin-top: 0.2rem;">
+            <input type="text" id="manualScanInput" class="form-control" placeholder="Escriba o pegue SKU / Serial p.ej. MC 001..." style="font-size: 0.85rem;" onkeypress="if(event.key==='Enter'){ executeManualScan(); }">
+            <button type="button" class="btn btn-primary" onclick="executeManualScan()" style="white-space: nowrap;">
+              🔍 Escanear
+            </button>
+          </div>
         </div>
       </div>
     </div>

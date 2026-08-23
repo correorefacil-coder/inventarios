@@ -878,6 +878,79 @@ body {
   border-bottom: none;
 }
 
+.custom-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.88rem;
+}
+
+.custom-table th:first-child,
+.custom-table td:first-child {
+  width: 95px;
+  max-width: 105px;
+  white-space: nowrap;
+  padding-left: 0.75rem;
+  padding-right: 0.5rem;
+}
+
+.custom-table th:nth-child(2),
+.custom-table td:nth-child(2) {
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.custom-table th:nth-child(3),
+.custom-table td:nth-child(3) {
+  width: 110px;
+}
+
+.custom-table th:nth-child(4),
+.custom-table td:nth-child(4) {
+  width: 90px;
+  white-space: nowrap;
+}
+
+.custom-table th:nth-child(5),
+.custom-table td:nth-child(5) {
+  min-width: 160px;
+}
+
+.custom-table th {
+  background: var(--table-th-bg);
+  padding: 0.85rem 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.custom-table td {
+  padding: 0.75rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+
+.custom-table tbody tr {
+  transition: background 0.15s ease;
+}
+
+.custom-table tbody tr:hover {
+  background: var(--bg-glass);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
 .suggestion-item:hover {
   background: rgba(16, 185, 129, 0.15);
 }
@@ -888,25 +961,31 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  background: var(--header-bg);
-  backdrop-filter: var(--backdrop-blur);
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(16px);
   border-top: 1px solid var(--border-color);
-  padding: 0.5rem;
-  z-index: 99;
-  justify-content: space-around;
+  padding: 0.25rem 0.1rem;
+  z-index: 9999;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
 }
 
 .mobile-nav-btn {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
+  justify-content: center;
+  gap: 0.1rem;
   color: var(--text-muted);
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.4rem;
+  padding: 0.3rem 0.1rem;
 }
 
 .mobile-nav-btn.active {
@@ -914,7 +993,17 @@ body {
 }
 
 .mobile-nav-btn .icon {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.mobile-nav-btn span:not(.icon) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  font-size: 0.62rem;
+  font-weight: 500;
 }
 
 @media (max-width: 900px) {
