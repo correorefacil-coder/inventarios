@@ -94643,6 +94643,12 @@ function handleSaveCustomer(event) {
   populateCustomerDropdowns();
 }
 
+function populateCustomerDropdowns() {
+  if (typeof populateSelects === 'function') {
+    populateSelects();
+  }
+}
+
 function selectCustomerFor360(customerId) {
   appState.selectedCustomerId = customerId;
   const customer = appState.customers.find(c => c.id === customerId);
