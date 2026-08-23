@@ -93253,12 +93253,24 @@ function downloadAuditLogsJSONFile() {
   addActivityLog("EXPORTACION", "AuditLogBackup", "Descarga de copia de seguridad en archivo físico JSON.");
 }
 
+function getLocalISOString(dateObj = null) {
+  const now = dateObj ? new Date(dateObj) : new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 function addActivityLog(actionType, entityName, description, extraPayload = null) {
-  const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+  const timestamp = getLocalISOString();
+  const currentUserName = appState.currentUser ? (appState.currentUser.name || `${appState.currentUser.firstName || ''} ${appState.currentUser.lastName || ''}`.trim()) : 'Sistema';
   const logEntry = {
     id: `log-${Date.now()}-${Math.floor(Math.random()*1000)}`,
     timestamp,
-    userName: appState.currentUser ? appState.currentUser.name : 'Sistema',
+    userName: currentUserName || 'Superusuario Gerencia',
     userEmail: appState.currentUser ? appState.currentUser.email : 'sistema@mascampo.co',
     roleName: appState.currentUser ? appState.currentUser.role : 'ADMINISTRADOR',
     actionType,
@@ -94413,9 +94425,16 @@ function renderAuditLogView() {
     if (l.actionType === "EXPORTACION") actionBadgeClass = "badge-amber";
     if (l.actionType === "GARANTIA") actionBadgeClass = "badge-red";
 
+    const parts = (l.timestamp || '').split(' ');
+    const dateStr = parts[0] || l.timestamp;
+    const timeStr = parts[1] || '';
+
     return `
       <tr>
-        <td><strong>${l.timestamp}</strong></td>
+        <td style="white-space: nowrap; min-width: 110px;">
+          <div style="font-weight: 700; color: var(--text-main); font-family: monospace; font-size: 0.88rem; line-height: 1.2;">${dateStr}</div>
+          ${timeStr ? `<div style="font-size: 0.8rem; color: var(--text-muted); font-family: monospace; line-height: 1.2; margin-top: 0.15rem;">${timeStr}</div>` : ''}
+        </td>
         <td>
           <div style="font-weight: 600;">${l.userName}</div>
           <div style="font-size: 0.73rem; color: var(--text-muted);">${l.userEmail} (${l.roleName})</div>
