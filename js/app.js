@@ -96321,6 +96321,59 @@ function openSerialInspectorModal(productId) {
     }).join('');
   }
 
+  // Populate Serial Registration Panel
+  const regPanel = document.getElementById("inspectorRegistrationPanel");
+  if (regPanel) {
+    if (product.requiresSerial) {
+      const totalSerialsCount = appState.serializedItems.filter(i => i.productId === productId).length;
+      const unassignedQty = Math.max(0, product.physicalStock - totalSerialsCount);
+
+      regPanel.innerHTML = `
+        <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid var(--border-highlight); padding: 0.85rem 1rem; border-radius: var(--radius-md);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; gap: 0.4rem;">
+            <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--accent-green); margin: 0;">
+              ➕ Registrar / Cargar Números de Serie
+            </h4>
+            <span class="badge ${unassignedQty > 0 ? 'badge-amber' : 'badge-green'}" style="font-size: 0.75rem;">
+              ${unassignedQty > 0 ? `${unassignedQty} unidades sin serial` : 'Todos los seriales cargados'}
+            </span>
+          </div>
+          <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+            Digite o escanee con la cámara (código de barras, QR, DataMatrix, Code 128) el serial único de fábrica para asignarlo al producto.
+          </p>
+
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.6rem;">
+            <div style="flex: 1; min-width: 160px;">
+              <label class="form-label" style="font-size: 0.75rem;">Ubicación / Sede:</label>
+              <select id="regSerialLocSelect" class="form-control" style="font-size: 0.82rem; padding: 0.35rem 0.5rem;">
+                ${appState.locations.map(l => `<option value="${l.id}">${l.name}</option>`).join('')}
+              </select>
+            </div>
+            <div style="flex: 2; min-width: 200px;">
+              <label class="form-label" style="font-size: 0.75rem;">Número de Serie de Fábrica:</label>
+              <div style="display: flex; gap: 0.4rem;">
+                <input type="text" id="regSerialInput" class="form-control" placeholder="Ej. SN-TED-2026-001" style="font-family: monospace; font-size: 0.85rem; padding: 0.35rem 0.6rem;">
+                <button type="button" class="btn btn-camera" style="padding: 0.35rem 0.65rem; font-size: 0.78rem; white-space: nowrap;" onclick="scanSerialForProductRegistration('${product.id}')" title="Escanear Código de Barras / QR con Cámara">
+                  📷 Escanear
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <button type="button" class="btn btn-primary" onclick="submitRegisterProductSerial('${product.id}')" style="width: 100%; padding: 0.45rem; font-size: 0.85rem;">
+            💾 Asignar Serial a Producto
+          </button>
+        </div>
+      `;
+    } else {
+      regPanel.innerHTML = `
+        <div style="background: rgba(100, 116, 139, 0.1); border: 1px solid var(--border-color); padding: 0.65rem 0.85rem; border-radius: var(--radius-md); font-size: 0.8rem; color: var(--text-muted);">
+          ℹ️ Este producto está configurado como <strong>Consumible / Desechable (Sin Control por Serial Individual)</strong>. Si desea exigir seriales únicos a cada unidad, active la opción <em>'Requiere Número de Serie'</em> en el formulario de edición del producto.
+        </div>
+      `;
+    }
+  }
+
   document.getElementById("serialInspectorModal").classList.add("active");
 }
 
@@ -97832,4 +97885,147 @@ function rejectPendingIntake(intakeId) {
     alert(`🔴 PROPUESTA RECHAZADA: El ingreso fue anulado y no afectará el inventario.`);
     renderAllViews();
   }
+}
+
+// ==========================================================================
+// UNIVERSAL CAMERA SCANNER (BARCODES 1D, QR CODES, 2D DATAMATRIX, CODE 128)
+// ==========================================================================
+
+let currentCameraStream = null;
+let cameraScannerInterval = null;
+
+async function startCameraScanner(onCodeScanned) {
+  const modal = document.getElementById("cameraScannerModal");
+  const video = document.getElementById("cameraScannerVideo");
+  const status = document.getElementById("cameraScannerStatus");
+  if (!modal || !video) return;
+
+  modal.classList.add("active");
+  if (status) status.textContent = "Buscando cámara...";
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" }
+    });
+    currentCameraStream = stream;
+    video.srcObject = stream;
+    await video.play();
+
+    if (status) status.textContent = "📷 Cámara activa. Apunte al código de barras, QR o DataMatrix...";
+
+    if ('BarcodeDetector' in window) {
+      const barcodeDetector = new BarcodeDetector({
+        formats: ['qr_code', 'code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'data_matrix', 'pdf417', 'aztec']
+      });
+
+      cameraScannerInterval = setInterval(async () => {
+        try {
+          const barcodes = await barcodeDetector.detect(video);
+          if (barcodes.length > 0) {
+            const scannedCode = barcodes[0].rawValue;
+            if (navigator.vibrate) navigator.vibrate(120);
+            closeCameraScannerModal();
+            if (typeof onCodeScanned === 'function') {
+              onCodeScanned(scannedCode);
+            }
+          }
+        } catch (err) {}
+      }, 250);
+    } else {
+      if (status) status.textContent = "💡 Digite o escanee con lector óptico USB/Bluetooth, o utilice Chrome/Safari en dispositivo móvil.";
+    }
+  } catch (err) {
+    if (status) status.textContent = "❌ No se pudo acceder a la cámara. Verifique los permisos en su navegador.";
+  }
+}
+
+function closeCameraScannerModal() {
+  const modal = document.getElementById("cameraScannerModal");
+  if (modal) modal.classList.remove("active");
+
+  if (cameraScannerInterval) {
+    clearInterval(cameraScannerInterval);
+    cameraScannerInterval = null;
+  }
+  if (currentCameraStream) {
+    currentCameraStream.getTracks().forEach(track => track.stop());
+    currentCameraStream = null;
+  }
+}
+
+// SERIAL INSPECTOR REGISTRATION CONTROLLER
+function submitRegisterProductSerial(productId) {
+  const input = document.getElementById("regSerialInput");
+  const locSelect = document.getElementById("regSerialLocSelect");
+  if (!input || !input.value.trim()) {
+    alert("⚠️ Por favor ingrese o escanee un número de serie válido.");
+    return;
+  }
+
+  const serialNum = input.value.trim().toUpperCase();
+  const locId = locSelect ? locSelect.value : "loc-1";
+
+  const exists = appState.serializedItems.some(i => i.serialNumber === serialNum);
+  if (exists) {
+    alert(`⚠️ El número de serie '${serialNum}' ya se encuentra registrado en el sistema.`);
+    return;
+  }
+
+  const newSerialObj = {
+    id: `ser-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+    productId: productId,
+    serialNumber: serialNum,
+    status: "EN_STOCK",
+    currentLocationId: locId,
+    currentCustomerId: null,
+    entryDate: new Date().toISOString().split("T")[0],
+    saleDate: null,
+    invoiceNumber: null,
+    attachments: [],
+    history: [
+      {
+        type: "INGRESO_MANUAL",
+        date: new Date().toISOString().split("T")[0],
+        user: (appState.currentUser ? appState.currentUser.name : null) || "Administrador",
+        description: "Registro de serial individual asignado a inventario de bodega.",
+        attachments: []
+      }
+    ]
+  };
+
+  appState.serializedItems.push(newSerialObj);
+  addActivityLog("CREACION", "SerialInspector", `Serial '${serialNum}' asignado a producto ID '${productId}'`);
+  alert(`✅ Serial '${serialNum}' registrado y asignado exitosamente.`);
+
+  openSerialInspectorModal(productId);
+  renderCatalog();
+}
+
+function scanSerialForProductRegistration(productId) {
+  startCameraScanner((code) => {
+    const input = document.getElementById("regSerialInput");
+    if (input) {
+      input.value = code;
+      submitRegisterProductSerial(productId);
+    }
+  });
+}
+
+function scanAndCheckTransferSerial() {
+  startCameraScanner((code) => {
+    const checkboxes = document.querySelectorAll(".transfer-serial-checkbox");
+    let found = false;
+    checkboxes.forEach(chk => {
+      if (chk.value.toUpperCase() === code.toUpperCase()) {
+        chk.checked = true;
+        found = true;
+      }
+    });
+
+    if (found) {
+      alert(`✅ Serial '${code}' escaneado y marcado para traslado.`);
+    } else {
+      alert(`⚠️ El serial '${code}' no se encuentra disponible en la sede de origen seleccionada.`);
+    }
+  });
 }

@@ -1850,23 +1850,27 @@
 
     <!-- Serial Inspector Modal -->
     <div id="serialInspectorModal" class="modal-overlay">
-      <div class="modal-content" style="max-width: 650px;">
+      <div class="modal-content" style="max-width: 650px; max-height: 90vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
           <div>
-            <h3 style="font-size: 1.1rem; font-weight: 700;">Inspección Detallada de Seriales</h3>
+            <h3 style="font-size: 1.1rem; font-weight: 700;">Inspección Detallada & Carga de Seriales</h3>
             <p id="inspectorProductName" style="font-size: 0.85rem; color: var(--accent-green); font-weight: 600;"></p>
           </div>
           <button class="btn btn-secondary" onclick="closeSerialInspectorModal()" style="padding: 0.2rem 0.6rem;">✕</button>
         </div>
 
         <div style="margin-bottom: 1rem;">
-          <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--accent-green); margin-bottom: 0.5rem;">🟢 Seriales Disponibles Actuales en Bodega:</h4>
+          <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--accent-green); margin-bottom: 0.5rem;">🟢 Seriales Registrados y Disponibles en Bodega:</h4>
           <div id="inspectorInStockList" style="max-height: 150px; overflow-y: auto;"></div>
+        </div>
+
+        <div id="inspectorRegistrationPanel" style="margin-bottom: 1rem;">
+          <!-- JS Rendered Serial Registration Panel -->
         </div>
 
         <div>
           <h4 style="font-size: 0.9rem; font-weight: 600; color: var(--accent-blue); margin-bottom: 0.5rem;">🔵 Seriales Vendidos / Salidos (Historial & Comprador):</h4>
-          <div id="inspectorExitedList" style="max-height: 200px; overflow-y: auto;"></div>
+          <div id="inspectorExitedList" style="max-height: 150px; overflow-y: auto;"></div>
         </div>
       </div>
     </div>
@@ -2144,6 +2148,34 @@
           </div>
         </div>
       </div>
+    <!-- Universal Camera Scanner Modal for 1D/2D Barcodes & QR Codes -->
+    <div id="cameraScannerModal" class="modal-overlay" style="z-index: 99999;">
+      <div class="modal-content" style="max-width: 480px; text-align: center;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--accent-green); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+            📷 Escáner de Código de Barras / QR / 2D
+          </h3>
+          <button class="btn btn-secondary" onclick="closeCameraScannerModal()" style="padding: 0.2rem 0.6rem;">✕</button>
+        </div>
+
+        <div style="position: relative; width: 100%; height: 260px; background: #000; border-radius: var(--radius-md); overflow: hidden; margin-bottom: 1rem; border: 2px solid var(--accent-green);">
+          <video id="cameraScannerVideo" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+          <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 220px; height: 130px; border: 2px dashed #10b981; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); pointer-events: none;"></div>
+          <div style="position: absolute; bottom: 10px; left: 0; right: 0; font-size: 0.75rem; color: #a7f3d0; background: rgba(0,0,0,0.7); padding: 0.25rem;">
+            Alinee el código de barras, QR o DataMatrix dentro del recuadro
+          </div>
+        </div>
+
+        <div id="cameraScannerStatus" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem; font-weight: 600;">
+          Iniciando cámara...
+        </div>
+
+        <button type="button" class="btn btn-secondary" onclick="closeCameraScannerModal()" style="width: 100%;">
+          Cancelar Escaneo
+        </button>
+      </div>
+    </div>
+
     <!-- Inactivity Warning Modal -->
     <div id="inactivityWarningModal" class="modal-overlay" style="z-index: 10000;">
       <div class="modal-content" style="max-width: 480px; text-align: center; border: 2px solid var(--accent-amber); padding: 1.5rem;">
