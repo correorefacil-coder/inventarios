@@ -94399,6 +94399,32 @@ function renderAllViews() {
 }
 
 // 1. CUSTOMER DIRECTORY & 360° ANALYTICS ENGINE
+function getCustomerBadgeHtml(docType = '') {
+  const dt = (docType || '').trim().toLowerCase();
+  if (dt === 'nit') {
+    return `<span class="badge badge-purple" style="font-size: 0.72rem; padding: 0.15rem 0.4rem;">NIT</span>`;
+  }
+  if (dt.includes('otro país') || dt.includes('exterior') || dt === 'nit-e') {
+    return `<span class="badge badge-purple" style="font-size: 0.72rem; padding: 0.15rem 0.4rem;">NIT-E</span>`;
+  }
+  if (dt.includes('extranjer') || dt === 'cc-e' || dt === 'ce') {
+    return `<span class="badge badge-amber" style="font-size: 0.72rem; padding: 0.15rem 0.4rem;">CC-E</span>`;
+  }
+  if (dt.includes('ciudadanía') || dt === 'cc') {
+    return `<span class="badge badge-blue" style="font-size: 0.72rem; padding: 0.15rem 0.4rem;">CC</span>`;
+  }
+  return `<span class="badge badge-blue" style="font-size: 0.72rem; padding: 0.15rem 0.4rem;">${docType || 'CC'}</span>`;
+}
+
+function getCleanCustomerDocNumber(c) {
+  let num = (c.rawDoc || c.documentNumber || '').trim();
+  num = num.replace(/^(NIT|CC|CE)\s*/i, '').trim();
+  if (!num.includes('-') && c.verificationDigit && (c.documentType === 'NIT' || c.documentType === 'NIT-E')) {
+    return `${num}-${c.verificationDigit}`;
+  }
+  return num || '-';
+}
+
 function renderCustomers() {
   const tableBody = document.getElementById("customersTableBody");
   const searchQuery = (document.getElementById("customerDirectorySearch")?.value || "").toLowerCase();
@@ -94407,9 +94433,20 @@ function renderCustomers() {
   if (!tableBody) return;
 
   const filtered = appState.customers.filter(c => {
-    const matchesType = (typeFilter === "ALL" || c.documentType === typeFilter);
+    const dt = (c.documentType || '').toLowerCase();
+    let matchesType = true;
+    if (typeFilter === "NIT") {
+      matchesType = (c.documentType === "NIT");
+    } else if (typeFilter === "NIT-E") {
+      matchesType = (dt.includes('otro país') || dt.includes('exterior') || dt === 'nit-e');
+    } else if (typeFilter === "CC") {
+      matchesType = (dt.includes('ciudadanía') || dt === 'cc');
+    } else if (typeFilter === "CC-E") {
+      matchesType = (dt.includes('extranjer') || dt === 'cc-e' || dt === 'ce');
+    }
     const matchesSearch = c.name.toLowerCase().includes(searchQuery) ||
-                          c.documentNumber.includes(searchQuery) ||
+                          (c.documentNumber && c.documentNumber.includes(searchQuery)) ||
+                          (c.rawDoc && c.rawDoc.includes(searchQuery)) ||
                           (c.city && c.city.toLowerCase().includes(searchQuery)) ||
                           (c.phone && c.phone.includes(searchQuery));
     return matchesType && matchesSearch;
@@ -94419,24 +94456,39 @@ function renderCustomers() {
   const counterContainer = document.getElementById("customersCounterBadge");
   if (counterContainer) {
     const nitCount = filtered.filter(c => c.documentType === 'NIT').length;
-    const cedulaCount = filtered.filter(c => c.documentType !== 'NIT').length;
+    const niteCount = filtered.filter(c => {
+      const dt = (c.documentType || '').toLowerCase();
+      return dt.includes('otro país') || dt.includes('exterior') || dt === 'nit-e';
+    }).length;
+    const cceCount = filtered.filter(c => {
+      const dt = (c.documentType || '').toLowerCase();
+      return dt.includes('extranjer') || dt === 'cc-e' || dt === 'ce';
+    }).length;
+    const ccCount = filtered.length - (nitCount + niteCount + cceCount);
 
     counterContainer.innerHTML = `
-      <span class="badge badge-purple" style="font-size: 0.82rem; padding: 0.35rem 0.65rem;">
-        👥 Mostrando: <strong>${filtered.length.toLocaleString('es-CO')}</strong> de ${appState.customers.length.toLocaleString('es-CO')} clientes
+      <span class="badge badge-purple" style="font-size: 0.76rem; padding: 0.2rem 0.45rem;">
+        👥 Total: <strong>${filtered.length.toLocaleString('es-CO')}</strong> / ${appState.customers.length.toLocaleString('es-CO')}
       </span>
-      <span class="badge badge-blue" style="font-size: 0.82rem; padding: 0.35rem 0.65rem;">
-        🏢 NITs (Empresas): <strong>${nitCount.toLocaleString('es-CO')}</strong>
+      <span class="badge badge-purple" style="font-size: 0.76rem; padding: 0.2rem 0.45rem;">
+        🏢 NIT: <strong>${nitCount.toLocaleString('es-CO')}</strong>
       </span>
-      <span class="badge badge-amber" style="font-size: 0.82rem; padding: 0.35rem 0.65rem;">
-        👤 Cédulas (Personas Naturales): <strong>${cedulaCount.toLocaleString('es-CO')}</strong>
+      <span class="badge badge-purple" style="font-size: 0.76rem; padding: 0.2rem 0.45rem;">
+        🌎 NIT-E: <strong>${niteCount.toLocaleString('es-CO')}</strong>
+      </span>
+      <span class="badge badge-blue" style="font-size: 0.76rem; padding: 0.2rem 0.45rem;">
+        👤 CC: <strong>${ccCount.toLocaleString('es-CO')}</strong>
+      </span>
+      <span class="badge badge-amber" style="font-size: 0.76rem; padding: 0.2rem 0.45rem;">
+        ✈️ CC-E: <strong>${cceCount.toLocaleString('es-CO')}</strong>
       </span>
     `;
   }
 
   tableBody.innerHTML = filtered.map(c => {
-    const formattedDoc = c.documentType === 'NIT' ? `NIT <strong>${c.documentNumber}</strong>-${c.verificationDigit || '0'}` : `CC <strong>${c.documentNumber}</strong>`;
-    
+    const badgeHtml = getCustomerBadgeHtml(c.documentType);
+    const cleanDocNum = getCleanCustomerDocNumber(c);
+
     // Calculate total purchases in COP for badge
     const totalPurchasedCOP = appState.movements
       .filter(m => (m.customerName && m.customerName.toLowerCase().includes(c.name.toLowerCase())) && m.type === 'SALIDA_VENTA')
@@ -94446,21 +94498,149 @@ function renderCustomers() {
       }, 0);
 
     return `
-      <tr style="cursor: pointer;" onclick="selectCustomerFor360('${c.id}')" title="Haga clic para ver perfil 360° y estadísticas">
-        <td><span class="badge ${c.documentType === 'NIT' ? 'badge-purple' : 'badge-blue'}">${c.documentType}</span></td>
-        <td>${formattedDoc}</td>
-        <td><strong>${c.name}</strong></td>
-        <td>${c.city || 'Colombia'}</td>
-        <td>${c.phone || '-'}</td>
-        <td><strong style="color: var(--accent-green);">$${totalPurchasedCOP.toLocaleString('es-CO')} COP</strong></td>
-        <td>
-          <button class="btn btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" onclick="event.stopPropagation(); selectCustomerFor360('${c.id}')">
-            📊 Ver Analítica 360°
-          </button>
+      <tr style="cursor: pointer;" onclick="selectCustomerFor360('${c.id}')" title="Clic para seleccionar perfil 360°">
+        <td style="padding: 0.35rem 0.5rem; text-align: center;">${badgeHtml}</td>
+        <td style="padding: 0.35rem 0.5rem; font-size: 0.8rem;"><strong style="font-family: monospace; color: var(--accent-green);">${cleanDocNum}</strong></td>
+        <td style="padding: 0.35rem 0.5rem; font-size: 0.82rem;"><strong>${c.name}</strong></td>
+        <td style="padding: 0.35rem 0.5rem; font-size: 0.78rem;">${c.city || 'Colombia'}</td>
+        <td style="padding: 0.35rem 0.5rem; font-size: 0.78rem;">${c.phone || '-'}</td>
+        <td style="padding: 0.35rem 0.5rem; font-size: 0.8rem;"><strong style="color: var(--accent-green);">$${totalPurchasedCOP.toLocaleString('es-CO')} COP</strong></td>
+        <td style="padding: 0.35rem 0.5rem; text-align: center;">
+          <div style="display: flex; gap: 0.25rem; justify-content: center;">
+            <button class="btn btn-secondary" style="padding: 0.18rem 0.45rem; font-size: 0.72rem;" onclick="event.stopPropagation(); openCustomerModal('${c.id}')" title="Editar cliente/proveedor">
+              ✏️ Editar
+            </button>
+            <button class="btn btn-primary" style="padding: 0.18rem 0.45rem; font-size: 0.72rem;" onclick="event.stopPropagation(); selectCustomerFor360('${c.id}')" title="Ver analítica 360°">
+              📊 360°
+            </button>
+          </div>
         </td>
       </tr>
     `;
   }).join('');
+}
+
+function openCustomerModal(customerId = null) {
+  const modal = document.getElementById("customerModal");
+  const title = document.getElementById("customerModalTitle");
+  const editIdInput = document.getElementById("customerEditId");
+  const form = document.getElementById("customerForm");
+
+  if (!modal) return;
+
+  if (customerId) {
+    const c = appState.customers.find(item => item.id === customerId);
+    if (!c) return;
+
+    if (title) title.textContent = `✏️ Editar Cliente / Proveedor (${c.name})`;
+    if (editIdInput) editIdInput.value = c.id;
+
+    const dt = (c.documentType || '').toLowerCase();
+    let selType = "CC";
+    if (c.documentType === "NIT") selType = "NIT";
+    else if (dt.includes("otro país") || dt.includes("exterior") || dt === "nit-e") selType = "NIT-E";
+    else if (dt.includes("extranjer") || dt === "cc-e" || dt === "ce") selType = "CC-E";
+    else if (dt.includes("ciudadanía") || dt === "cc") selType = "CC";
+
+    document.getElementById("customerModalDocType").value = selType;
+    document.getElementById("customerModalDocNum").value = (c.documentNumber || c.rawDoc || '').replace(/^(NIT|CC|CE)\s*/i, '').split('-')[0];
+    document.getElementById("customerModalDV").value = c.verificationDigit || '';
+    document.getElementById("customerModalName").value = c.name || '';
+    document.getElementById("customerModalCity").value = c.city || '';
+    document.getElementById("customerModalPhone").value = c.phone || '';
+    document.getElementById("customerModalEmail").value = c.email || '';
+    document.getElementById("customerModalAddress").value = c.address || '';
+  } else {
+    if (title) title.textContent = "👤 Crear Nuevo Cliente / Proveedor";
+    if (editIdInput) editIdInput.value = "";
+    if (form) form.reset();
+  }
+
+  toggleCustomerDVField();
+  modal.classList.add("active");
+}
+
+function closeCustomerModal() {
+  const modal = document.getElementById("customerModal");
+  if (modal) modal.classList.remove("active");
+}
+
+function toggleCustomerDVField() {
+  const docType = document.getElementById("customerModalDocType")?.value;
+  const dvInput = document.getElementById("customerModalDV");
+  if (dvInput) {
+    if (docType === "NIT" || docType === "NIT-E") {
+      dvInput.style.display = "block";
+      dvInput.removeAttribute("disabled");
+    } else {
+      dvInput.style.display = "none";
+      dvInput.value = "";
+    }
+  }
+}
+
+function handleSaveCustomer(event) {
+  event.preventDefault();
+  const editId = document.getElementById("customerEditId")?.value;
+  const docTypeVal = document.getElementById("customerModalDocType")?.value;
+  const docNumVal = document.getElementById("customerModalDocNum")?.value.trim();
+  const dvVal = document.getElementById("customerModalDV")?.value.trim();
+  const nameVal = document.getElementById("customerModalName")?.value.trim();
+  const cityVal = document.getElementById("customerModalCity")?.value.trim();
+  const phoneVal = document.getElementById("customerModalPhone")?.value.trim();
+  const emailVal = document.getElementById("customerModalEmail")?.value.trim();
+  const addressVal = document.getElementById("customerModalAddress")?.value.trim();
+
+  if (!docNumVal || !nameVal) {
+    alert("⚠️ Por favor ingrese el número de documento y la razón social/nombre.");
+    return;
+  }
+
+  let docTypeFull = docTypeVal;
+  if (docTypeVal === "NIT") docTypeFull = "NIT";
+  else if (docTypeVal === "NIT-E") docTypeFull = "Nit de otro país / Sin identificación del exterior (43 medios magnéticos)";
+  else if (docTypeVal === "CC") docTypeFull = "Cédula de ciudadanía";
+  else if (docTypeVal === "CC-E") docTypeFull = "Cédula de extranjería";
+
+  const rawFormattedDoc = (docTypeVal === "NIT" || docTypeVal === "NIT-E") && dvVal ? `${docNumVal}-${dvVal}` : docNumVal;
+
+  if (editId) {
+    const custIndex = appState.customers.findIndex(c => c.id === editId);
+    if (custIndex !== -1) {
+      appState.customers[custIndex] = {
+        ...appState.customers[custIndex],
+        documentType: docTypeFull,
+        documentNumber: docNumVal,
+        verificationDigit: dvVal || null,
+        rawDoc: rawFormattedDoc,
+        name: nameVal,
+        city: cityVal,
+        phone: phoneVal,
+        email: emailVal,
+        address: addressVal
+      };
+      addActivityLog("EDICION", "CustomerDirectory", `Cliente/Proveedor '${nameVal}' (${rawFormattedDoc}) actualizado.`);
+    }
+  } else {
+    const newCust = {
+      id: "cust-" + Date.now(),
+      documentType: docTypeFull,
+      documentNumber: docNumVal,
+      verificationDigit: dvVal || null,
+      rawDoc: rawFormattedDoc,
+      name: nameVal,
+      city: cityVal,
+      phone: phoneVal,
+      email: emailVal,
+      address: addressVal
+    };
+    appState.customers.unshift(newCust);
+    addActivityLog("CREACION", "CustomerDirectory", `Nuevo Cliente/Proveedor '${nameVal}' (${rawFormattedDoc}) registrado.`);
+  }
+
+  closeCustomerModal();
+  renderCustomers();
+  populateCustomerDropdowns();
 }
 
 function selectCustomerFor360(customerId) {
