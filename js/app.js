@@ -105015,11 +105015,34 @@ function switchView(viewId) {
 
   document.querySelectorAll(`[data-view="${viewId}"]`).forEach(lnk => lnk.classList.add("active"));
 
-  if (viewId === 'view-catalog') {
+  if (viewId === 'view-dashboard') {
+    renderDashboard();
+  } else if (viewId === 'view-catalog') {
     populateAmazonSidebarFilters();
     renderCatalog();
-  }
-  if (viewId === 'view-forecasting') {
+  } else if (viewId === 'view-locations') {
+    renderLocationsView();
+  } else if (viewId === 'view-pending-validations') {
+    const filterElem = document.getElementById("pendingStatusFilter");
+    if (filterElem && !filterElem.value) filterElem.value = "PENDIENTE_VALIDACION";
+    renderPendingValidationsView();
+  } else if (viewId === 'view-kardex') {
+    renderKardex();
+  } else if (viewId === 'view-equipment') {
+    renderEquipmentLifeCycle();
+  } else if (viewId === 'view-customers-analytics') {
+    renderCustomers();
+    renderCustomer360Analytics();
+  } else if (viewId === 'view-reservations') {
+    renderReservations();
+  } else if (viewId === 'view-users') {
+    renderUsers();
+  } else if (viewId === 'view-audit-logs') {
+    renderAuditLogView();
+  } else if (viewId === 'view-alerts-regression') {
+    renderAlerts();
+    renderMarginReport();
+  } else if (viewId === 'view-forecasting') {
     runLinearRegressionForecast();
   }
 }
@@ -109185,7 +109208,7 @@ function renderPendingValidationsView() {
     return i.status === statusFilter;
   });
 
-  const isAdmin = (appState.currentUser.role === 'ADMINISTRADOR');
+  const isAdmin = (appState.currentUser.role === 'ADMINISTRADOR' || appState.currentUser.role === 'SUPERADMINISTRADOR' || appState.currentUser.email === 'gerencia@softproductiva.com');
 
   if (filtered.length === 0) {
     tableBody.innerHTML = `
