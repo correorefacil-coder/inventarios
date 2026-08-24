@@ -103924,38 +103924,70 @@ function saveAuditLogsToDisk() {
 
 function loadUsersFromDisk() {
   try {
+    let userList = null;
     const saved = localStorage.getItem("mascampo_users_db");
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        parsed.forEach(u => {
-          if (u.email === "mascmpo@gmail.com" || u.email === "mascampo@gmail.com" || u.id === "usr-leyla") {
-            u.email = "mascmpo@gmail.com";
-            u.role = "ADMINISTRADOR";
-            u.active = true;
-            u.mustChangePassword = false;
-            if (!u.password || typeof u.password !== 'string' || !u.password.startsWith('$MAS_CAMPO_SECURE_SALT_2026$')) {
-              u.password = "$MAS_CAMPO_SECURE_SALT_2026$7ebedda5ac3020c1e30eb1eda96f7f99bf98de4214406df45d7997dff144b6fe";
-            }
-          }
-        });
-        appState.users = parsed;
-        saveUsersToDisk();
-        return;
+        userList = parsed;
       }
     }
+
+    const savedCustom = localStorage.getItem("mascampo_custom_users_db");
+    let customUsers = [];
+    if (savedCustom) {
+      const parsedCustom = JSON.parse(savedCustom);
+      if (Array.isArray(parsedCustom)) {
+        customUsers = parsedCustom;
+      }
+    }
+
+    if (!userList) {
+      userList = [...systemUsers];
+    }
+
+    // Merge custom users so none are ever lost
+    if (customUsers.length > 0) {
+      customUsers.forEach(cu => {
+        const existingIdx = userList.findIndex(u => u.id === cu.id || u.email.toLowerCase() === cu.email.toLowerCase());
+        if (existingIdx !== -1) {
+          userList[existingIdx] = { ...userList[existingIdx], ...cu };
+        } else {
+          userList.push(cu);
+        }
+      });
+    }
+
+    // Ensure system critical accounts always exist
+    systemUsers.forEach(su => {
+      const exists = userList.find(u => u.id === su.id || u.email.toLowerCase() === su.email.toLowerCase());
+      if (!exists) {
+        userList.unshift({ ...su });
+      }
+    });
+
+    appState.users = userList;
+    saveUsersToDisk();
+    return;
   } catch (e) {
     console.warn("No se pudo cargar la lista de usuarios de localStorage", e);
   }
-  appState.users = systemUsers;
+  appState.users = [...systemUsers];
   saveUsersToDisk();
 }
 
 function saveUsersToDisk() {
+  if (!appState.users || !Array.isArray(appState.users)) return;
   try {
     localStorage.setItem("mascampo_users_db", JSON.stringify(appState.users));
   } catch (e) {
-    console.error("Error guardando usuarios en almacenamiento local", e);
+    console.warn("Error guardando base completa de usuarios en localStorage:", e);
+  }
+  try {
+    const customUsers = appState.users.filter(u => !['usr-super', 'usr-leyla', 'usr-2', 'usr-3'].includes(u.id));
+    localStorage.setItem("mascampo_custom_users_db", JSON.stringify(customUsers));
+  } catch (err) {
+    console.error("Error guardando usuarios personalizados en almacenamiento persistente:", err);
   }
 }
 
@@ -106098,7 +106130,7 @@ async function handleSaveUser(e) {
       active: isSuperAccount ? true : activeInput,
       createdAt: new Date().toISOString().substring(0, 10),
       isSuperuser: isSuperAccount,
-      mustChangePassword: true
+      mustChangePassword: false
     };
 
     appState.users.push(newUser);
@@ -106110,6 +106142,7 @@ async function handleSaveUser(e) {
   closeUserModal();
   renderUsers();
   populateDropdowns();
+  updateHeaderUserControls();
 }
 
 function handleCreateUser(e) {
