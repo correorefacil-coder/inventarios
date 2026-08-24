@@ -107870,22 +107870,27 @@ function openAddEventModal() {
 
 function renderReservations() {
   const tableBody = document.getElementById("reservationsTableBody");
+  if (!tableBody) return;
+  if (!appState.reservations || appState.reservations.length === 0) {
+    tableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-muted);">No hay reservas ni bloqueos de stock activos.</td></tr>`;
+    return;
+  }
   tableBody.innerHTML = appState.reservations.map(r => {
-    const prod = appState.products.find(p => p.id === r.productId);
-    const cust = appState.customers.find(c => c.id === r.customerId);
+    const prod = appState.products.find(p => p.id === r.productId || p.sku === r.productId);
+    const cust = appState.customers.find(c => c.id === r.customerId || c.documentNumber === r.customerId);
 
     return `
       <tr>
         <td><strong>${r.id}</strong></td>
-        <td>${cust ? cust.name : 'Cliente'}</td>
-        <td>${prod ? prod.sku : ''} - ${prod ? prod.name : ''}</td>
+        <td>${cust ? cust.name : (r.customerName || 'Cliente')}</td>
+        <td>${prod ? `<strong>${prod.sku}</strong> - ${prod.name}` : (r.productSku || 'Producto')}</td>
         <td><strong style="color: var(--accent-amber);">${r.quantity}</strong></td>
         <td>${r.reason}</td>
         <td>${r.date}</td>
-        <td><span class="badge badge-amber">${r.status}</span></td>
+        <td><span class="badge badge-amber">${r.status || 'ACTIVA'}</span></td>
         <td>
-          <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="cancelReservation('${r.id}')">
-            Liberar Stock
+          <button class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" onclick="cancelReservation('${r.id}')">
+            🔓 Liberar Stock
           </button>
         </td>
       </tr>
@@ -107928,8 +107933,13 @@ function handleCreateReservation(e) {
     return;
   }
 
-  const quantity = parseInt(document.getElementById("resQuantity").value);
-  const reason = document.getElementById("resReason").value;
+  const quantity = parseInt(document.getElementById("resQuantity").value) || 1;
+  const reason = (document.getElementById("resReason")?.value || "").trim();
+
+  if (quantity <= 0) {
+    alert("⚠️ La cantidad a reservar debe ser mayor a 0.");
+    return;
+  }
 
   const product = appState.products.find(p => p.id === productId);
   if (!product) {
@@ -107937,32 +107947,43 @@ function handleCreateReservation(e) {
     return;
   }
 
-  const availableStock = product.physicalStock - product.reservedStock;
+  const availableStock = (product.physicalStock || 0) - (product.reservedStock || 0);
 
   if (quantity > availableStock) {
-    alert(`⚠️ STOCK INSUFICIENTE: Stock Disponible actual: ${availableStock}.`);
+    alert(`⚠️ STOCK INSUFICIENTE: Stock Disponible actual: ${availableStock} unidades.`);
     return;
   }
 
-  product.reservedStock += quantity;
+  product.reservedStock = (product.reservedStock || 0) + quantity;
+
+  const custObj = appState.customers.find(c => c.id === customerId);
 
   const newRes = {
-    id: `res-${Date.now().toString().slice(-4)}`,
+    id: `res-${Date.now().toString().slice(-6)}`,
     customerId,
+    customerName: custObj ? custObj.name : "",
     productId,
+    productSku: product.sku,
     quantity,
-    reason,
+    reason: reason || "Reserva de Stock",
     status: "ACTIVA",
     date: new Date().toISOString().substring(0, 10)
   };
 
-  appState.reservations.push(newRes);
+  if (!appState.reservations) appState.reservations = [];
+  appState.reservations.unshift(newRes);
   saveProductsToDisk();
   saveReservationsToDisk();
   addActivityLog("CREACION", "Reservation", `Bloqueo/Reserva de ${quantity} unidades para ${product.sku}. Motivo: ${reason}`);
 
-  alert("✅ Stock reservado exitosamente.");
+  alert("✅ Stock reservado y bloqueado exitosamente.");
   closeReservationModal();
+  document.getElementById("newReservationForm")?.reset();
+  const resCustSelect = document.getElementById("resCustomerSelect");
+  if (resCustSelect) resCustSelect.value = "";
+  const resProdSelect = document.getElementById("resProductSelect");
+  if (resProdSelect) resProdSelect.value = "";
+
   populateDropdowns();
   renderAllViews();
 }
@@ -108023,7 +108044,7 @@ function filterResProductAutocomplete(query = "") {
   }
 
   panel.innerHTML = filtered.slice(0, 20).map(p => {
-    const avail = Math.max(0, p.physicalStock - p.reservedStock);
+    const avail = Math.max(0, (p.physicalStock || 0) - (p.reservedStock || 0));
     const labelText = `${p.sku} - ${p.name}`;
     const safeLabel = labelText.replace(/'/g, "\\'");
     return `<div class="autocomplete-dropdown-item" onclick="selectResProduct('${p.id}', '${safeLabel}')">
@@ -108062,9 +108083,16 @@ function cancelReservation(resId) {
   const res = appState.reservations.find(r => r.id === resId);
   if (!res) return;
 
-  const product = appState.products.find(p => p.id === res.productId);
+  const product = appState.products.find(p => p.id === res.productId || p.sku === res.productId);
+  const cust = appState.customers.find(c => c.id === res.customerId || c.documentNumber === res.customerId);
+  const custName = cust ? cust.name : (res.customerName || "Cliente");
+  const prodName = product ? `${product.sku} - ${product.name}` : (res.productSku || "Producto");
+
+  const confirmed = confirm(`⚠️ ¿Confirmar liberación de reserva?\n\n📦 Producto: ${prodName}\n🔢 Cantidad: ${res.quantity} unidades\n👤 Cliente: ${custName}\n\n¿Desea desbloquear estas unidades y devolverlas al Stock Disponible?`);
+  if (!confirmed) return;
+
   if (product) {
-    product.reservedStock = Math.max(0, product.reservedStock - res.quantity);
+    product.reservedStock = Math.max(0, (product.reservedStock || 0) - res.quantity);
   }
 
   res.status = "CANCELADA";
@@ -108073,8 +108101,9 @@ function cancelReservation(resId) {
   saveProductsToDisk();
   saveReservationsToDisk();
 
-  addActivityLog("MODIFICACION", "ReservationCancel", `Cancelación de reserva ${resId}. Stock liberado.`);
+  addActivityLog("MODIFICACION", "ReservationCancel", `Cancelación/Liberación de reserva ${resId}. Stock devuelto a disponible (${res.quantity} unid. de ${prodName}).`);
   renderAllViews();
+  alert("✅ Reserva liberada exitosamente. El stock ha vuelto a estar disponible.");
 }
 
 function renderAlerts() {
