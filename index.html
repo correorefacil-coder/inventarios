@@ -279,7 +279,7 @@
       <main class="content-body">
 
         <!-- Banner de Ingesta Automática Sigo Activa -->
-        <div class="panel" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%); border-color: var(--border-highlight); margin-bottom: 1rem; padding: 0.75rem 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <div id="sigoAutoIngestBanner" class="panel" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%); border-color: var(--border-highlight); margin-bottom: 1rem; padding: 0.75rem 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
           <span style="color: #6ee7b7; font-size: 0.85rem; font-weight: 500;">
             ⚡ <strong>Motor de Ingesta Automática Sigo Activo</strong>: Cargue su reporte de cierre de caja en 1 clic. El sistema creará los clientes nuevos y descontará el inventario automáticamente.
           </span>
@@ -914,7 +914,7 @@
               <h2 class="panel-title">Directorio de Clientes & Analítica Comercial 360°</h2>
               <p style="font-size: 0.85rem; color: var(--text-muted);">Sanitización de NIT (con DV separado) vs Cédula, historial de seriales y analítica financiera</p>
             </div>
-            <button class="btn btn-primary" onclick="openCustomerModal()">
+            <button id="btnNewCustomer" class="btn btn-primary" onclick="openCustomerModal()">
               <span>👤</span> + Crear Cliente / Proveedor
             </button>
           </div>

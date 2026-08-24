@@ -104967,34 +104967,134 @@ function initRoleSwitcher() {
   });
 }
 
+const ROLE_PERMISSIONS = {
+  ADMINISTRADOR: {
+    views: ['view-dashboard', 'view-catalog', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-users', 'view-audit-logs', 'view-forecasting', 'view-reports'],
+    canEditCatalog: true,
+    canEditCustomers: true,
+    canApprovePendingIntakes: true,
+    canViewFinancials: true,
+    canUploadSigo: true,
+    canManageUsers: true,
+    canViewAudit: true,
+    canExportReports: true
+  },
+  SUPERADMINISTRADOR: {
+    views: ['view-dashboard', 'view-catalog', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-users', 'view-audit-logs', 'view-forecasting', 'view-reports'],
+    canEditCatalog: true,
+    canEditCustomers: true,
+    canApprovePendingIntakes: true,
+    canViewFinancials: true,
+    canUploadSigo: true,
+    canManageUsers: true,
+    canViewAudit: true,
+    canExportReports: true
+  },
+  LOGISTICA: {
+    views: ['view-dashboard', 'view-catalog', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-forecasting'],
+    canEditCatalog: false,
+    canEditCustomers: true,
+    canApprovePendingIntakes: false,
+    canViewFinancials: false,
+    canUploadSigo: false,
+    canManageUsers: false,
+    canViewAudit: false,
+    canExportReports: false
+  },
+  VENTAS: {
+    views: ['view-dashboard', 'view-catalog', 'view-equipment', 'view-customers-analytics', 'view-reservations'],
+    canEditCatalog: false,
+    canEditCustomers: false,
+    canApprovePendingIntakes: false,
+    canViewFinancials: false,
+    canUploadSigo: false,
+    canManageUsers: false,
+    canViewAudit: false,
+    canExportReports: false
+  }
+};
+
+function getRolePermissions(roleOrUser) {
+  const roleName = (typeof roleOrUser === 'string' ? roleOrUser : (roleOrUser?.role || roleOrUser?.roleName || '')).toUpperCase();
+  if (roleName.includes('ADMIN') || roleOrUser?.email === 'gerencia@softproductiva.com') {
+    return ROLE_PERMISSIONS.ADMINISTRADOR;
+  }
+  if (roleName.includes('LOGIS')) {
+    return ROLE_PERMISSIONS.LOGISTICA;
+  }
+  if (roleName.includes('VENTA') || roleName.includes('ASESOR') || roleName.includes('COMERCIAL')) {
+    return ROLE_PERMISSIONS.VENTAS;
+  }
+  return ROLE_PERMISSIONS.VENTAS;
+}
+
 function isAdminUser(roleOrUser) {
   if (!roleOrUser) return false;
   const role = typeof roleOrUser === 'string' ? roleOrUser : (roleOrUser.role || roleOrUser.roleName || '');
   const r = role.toUpperCase();
-  return r === 'ADMINISTRADOR' || r === 'SUPERADMINISTRADOR' || r === 'SUPER_ADMINISTRADOR' || r === 'SUPERADMIN' || r === 'SUPERUSER';
+  return r === 'ADMINISTRADOR' || r === 'SUPERADMINISTRADOR' || r === 'SUPER_ADMINISTRADOR' || r === 'SUPERADMIN' || r === 'SUPERUSER' || roleOrUser.email === 'gerencia@softproductiva.com';
 }
 
 function toggleFinancialFields(role) {
-  const costColumns = document.querySelectorAll(".cost-column");
-  const btnNewProduct = document.getElementById("btnNewProduct");
-  const btnNewCategory = document.getElementById("btnNewCategory");
-  const btnAdminUsers = document.getElementById("btnAdminUsers");
-  const btnUploadSigoSales = document.getElementById("btnUploadSigoSales");
-  const auditLink = document.querySelector('[data-view="view-audit-logs"]');
-  const financialRestrictedMsg = document.getElementById("financialRestrictedMsg");
+  const perms = getRolePermissions(role || appState.currentUser);
 
-  const isAllowed = isAdminUser(role);
-
-  costColumns.forEach(el => {
-    el.style.display = isAllowed ? "" : "none";
+  // 1. Desktop & Mobile Navigation Links Visibility
+  document.querySelectorAll('[data-view]').forEach(link => {
+    const targetView = link.getAttribute('data-view');
+    const isAllowedView = perms.views.includes(targetView);
+    link.style.display = isAllowedView ? "" : "none";
   });
 
-  if (btnNewProduct) btnNewProduct.style.display = isAllowed ? "inline-flex" : "none";
-  if (btnNewCategory) btnNewCategory.style.display = isAllowed ? "inline-flex" : "none";
-  if (btnAdminUsers) btnAdminUsers.style.display = isAllowed ? "inline-flex" : "none";
-  if (btnUploadSigoSales) btnUploadSigoSales.style.display = isAllowed ? "inline-flex" : "none";
-  if (auditLink) auditLink.style.display = isAllowed ? "flex" : "none";
-  if (financialRestrictedMsg) financialRestrictedMsg.style.display = isAllowed ? "none" : "block";
+  // 2. Sigo Ingest elements
+  const sidebarSigoLink = document.getElementById("sidebarSigoLink");
+  const mobileDrawerSigoLink = document.getElementById("mobileDrawerSigoLink");
+  const sigoAutoIngestBanner = document.getElementById("sigoAutoIngestBanner");
+  const btnUploadSigoSales = document.getElementById("btnUploadSigoSales");
+
+  if (sidebarSigoLink) sidebarSigoLink.style.display = perms.canUploadSigo ? "" : "none";
+  if (mobileDrawerSigoLink) mobileDrawerSigoLink.style.display = perms.canUploadSigo ? "" : "none";
+  if (sigoAutoIngestBanner) sigoAutoIngestBanner.style.display = perms.canUploadSigo ? "flex" : "none";
+  if (btnUploadSigoSales) btnUploadSigoSales.style.display = perms.canUploadSigo ? "inline-flex" : "none";
+
+  // 3. Financial Costs / Margins in Catalog
+  const costColumns = document.querySelectorAll(".cost-column");
+  costColumns.forEach(el => {
+    el.style.display = perms.canViewFinancials ? "" : "none";
+  });
+
+  // 4. Catalog Edit Buttons
+  const btnNewProduct = document.getElementById("btnNewProduct");
+  const btnNewCategory = document.getElementById("btnNewCategory");
+  const btnUploadExcelProducts = document.getElementById("btnUploadExcelProducts");
+  if (btnNewProduct) btnNewProduct.style.display = perms.canEditCatalog ? "inline-flex" : "none";
+  if (btnNewCategory) btnNewCategory.style.display = perms.canEditCatalog ? "inline-flex" : "none";
+  if (btnUploadExcelProducts) btnUploadExcelProducts.style.display = perms.canEditCatalog ? "inline-flex" : "none";
+
+  // 5. Customer Creation Button
+  const btnNewCustomer = document.getElementById("btnNewCustomer");
+  if (btnNewCustomer) btnNewCustomer.style.display = perms.canEditCustomers ? "inline-flex" : "none";
+
+  // 6. User Management Button
+  const btnAdminUsers = document.getElementById("btnAdminUsers");
+  if (btnAdminUsers) btnAdminUsers.style.display = perms.canManageUsers ? "inline-flex" : "none";
+
+  // 7. Banner RBAC Info
+  const rbacBanner = document.getElementById("rbacBanner");
+  const activeRoleName = document.getElementById("activeRoleName");
+  if (rbacBanner && activeRoleName) {
+    if (perms.canViewFinancials) {
+      rbacBanner.style.display = "none";
+    } else {
+      rbacBanner.style.display = "block";
+      activeRoleName.textContent = (appState.currentUser?.role || role || 'Usuario');
+    }
+  }
+
+  // 8. Safe View Redirection
+  const currentActiveSection = document.querySelector('.view-section.active');
+  if (currentActiveSection && !perms.views.includes(currentActiveSection.id)) {
+    switchView('view-dashboard');
+  }
 }
 
 function initNavigation() {
@@ -105007,6 +105107,13 @@ function initNavigation() {
 }
 
 function switchView(viewId) {
+  const perms = getRolePermissions(appState.currentUser);
+  if (!perms.views.includes(viewId)) {
+    alert("🔒 Acceso Restringido: Su rol actual no tiene permisos para acceder a esta sección.");
+    switchView('view-dashboard');
+    return;
+  }
+
   document.querySelectorAll(".view-section").forEach(sec => sec.classList.remove("active"));
   document.querySelectorAll("[data-view]").forEach(lnk => lnk.classList.remove("active"));
 
@@ -105304,9 +105411,11 @@ function renderCustomers() {
         <td style="padding: 0.35rem 0.5rem; font-size: 0.8rem;"><strong style="color: var(--accent-green);">$${totalPurchasedCOP.toLocaleString('es-CO')} COP</strong></td>
         <td style="padding: 0.35rem 0.5rem; text-align: center;">
           <div style="display: flex; gap: 0.25rem; justify-content: center;">
-            <button class="btn btn-secondary" style="padding: 0.18rem 0.45rem; font-size: 0.72rem;" onclick="event.stopPropagation(); openCustomerModal('${c.id}')" title="Editar cliente/proveedor">
-              ✏️ Editar
-            </button>
+            ${getRolePermissions(appState.currentUser).canEditCustomers ? `
+              <button class="btn btn-secondary" style="padding: 0.18rem 0.45rem; font-size: 0.72rem;" onclick="event.stopPropagation(); openCustomerModal('${c.id}')" title="Editar cliente/proveedor">
+                ✏️ Editar
+              </button>
+            ` : ''}
             <button class="btn btn-primary" style="padding: 0.18rem 0.45rem; font-size: 0.72rem;" onclick="event.stopPropagation(); selectCustomerFor360('${c.id}')" title="Ver analítica 360°">
               📊 360°
             </button>
@@ -105318,6 +105427,11 @@ function renderCustomers() {
 }
 
 function openCustomerModal(customerId = null) {
+  const perms = getRolePermissions(appState.currentUser);
+  if (!perms.canEditCustomers) {
+    alert("🔒 Restricción RBAC: Su rol actual no tiene permisos para crear o editar clientes / proveedores.");
+    return;
+  }
   const modal = document.getElementById("customerModal");
   const title = document.getElementById("customerModalTitle");
   const editIdInput = document.getElementById("customerEditId");
