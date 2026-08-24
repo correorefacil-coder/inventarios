@@ -99470,6 +99470,10 @@ document.addEventListener("DOMContentLoaded", () => {
   loadUsersFromDisk();
   loadPersistedAuditLogs();
   loadPersistedPendingIntakes();
+  loadProductsFromDisk();
+  loadMovementsFromDisk();
+  loadReservationsFromDisk();
+  loadSerializedItemsFromDisk();
   ensureGlobalSerials();
   initThemeManager();
   initRoleSwitcher();
@@ -100939,6 +100943,10 @@ function handleTransferStock(e) {
   };
 
   appState.movements.unshift(transferMov);
+  saveProductsToDisk();
+  saveMovementsToDisk();
+  saveSerializedItemsToDisk();
+
   addActivityLog("MODIFICACION", "StockTransfer", `Traslado de ${qty} unidades de '${product.sku}' desde '${fromLoc.name}' hacia '${toLoc.name}'.`);
 
   alert(`✅ TRASLADO EXITOSO: ${qty} unidades de ${product.sku} trasladadas a '${toLoc.name}'.`);
@@ -102255,10 +102263,18 @@ function handleCreateMovement(e) {
       return;
     }
 
-    if (type === 'INGRESO_COMPRA') {
-      product.physicalStock += qty;
-    } else if (type === 'SALIDA_VENTA') {
-      product.physicalStock -= qty;
+    ensureProductLocations();
+    if (!product.stockByLocation) product.stockByLocation = {};
+
+    if (type === 'INGRESO_COMPRA' || type === 'ENTRADA') {
+      product.physicalStock = (product.physicalStock || 0) + qty;
+      product.stockByLocation["loc-1"] = (product.stockByLocation["loc-1"] || 0) + qty;
+    } else if (type === 'SALIDA_VENTA' || type === 'GARANTIA_REEMPLAZO' || type === 'SALIDA') {
+      product.physicalStock = Math.max(0, (product.physicalStock || 0) - qty);
+      product.stockByLocation["loc-1"] = Math.max(0, (product.stockByLocation["loc-1"] || 0) - qty);
+    } else if (type === 'AJUSTE') {
+      product.physicalStock = Math.max(0, (product.physicalStock || 0) + qty);
+      product.stockByLocation["loc-1"] = Math.max(0, (product.stockByLocation["loc-1"] || 0) + qty);
     }
 
     const newMov = {
@@ -102278,7 +102294,7 @@ function handleCreateMovement(e) {
 
     if (product.requiresSerial && serialNumber) {
       let serialItem = appState.serializedItems.find(i => i.serialNumber === serialNumber);
-      if (!serialItem && type === 'INGRESO_COMPRA') {
+      if (!serialItem && (type === 'INGRESO_COMPRA' || type === 'ENTRADA')) {
         serialItem = {
           id: `ser-${Date.now()}`,
           productId: prodId,
@@ -102311,6 +102327,10 @@ function handleCreateMovement(e) {
         });
       }
     }
+
+    saveProductsToDisk();
+    saveMovementsToDisk();
+    saveSerializedItemsToDisk();
 
     addActivityLog("CREACION", "KardexMovement", `Registro de movimiento Kardex (${type}) para '${product.sku}'. Cant: ${qty}. Factura: ${invoice || 'N/A'}`);
 
@@ -102545,6 +102565,8 @@ function handleCreateReservation(e) {
   };
 
   appState.reservations.push(newRes);
+  saveProductsToDisk();
+  saveReservationsToDisk();
   addActivityLog("CREACION", "Reservation", `Bloqueo/Reserva de ${quantity} unidades para ${product.sku}. Motivo: ${reason}`);
 
   alert("✅ Stock reservado exitosamente.");
@@ -102655,6 +102677,9 @@ function cancelReservation(resId) {
 
   res.status = "CANCELADA";
   appState.reservations = appState.reservations.filter(r => r.id !== resId);
+
+  saveProductsToDisk();
+  saveReservationsToDisk();
 
   addActivityLog("MODIFICACION", "ReservationCancel", `Cancelación de reserva ${resId}. Stock liberado.`);
   renderAllViews();
@@ -103543,6 +103568,98 @@ function savePendingIntakesToDisk() {
   }
 }
 
+function loadProductsFromDisk() {
+  try {
+    const saved = localStorage.getItem("mascampo_products_db");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        appState.products = parsed;
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn("No se pudo cargar productos de localStorage", e);
+  }
+}
+
+function saveProductsToDisk() {
+  try {
+    localStorage.setItem("mascampo_products_db", JSON.stringify(appState.products));
+  } catch (e) {
+    console.error("Error guardando productos en almacenamiento persistente", e);
+  }
+}
+
+function loadMovementsFromDisk() {
+  try {
+    const saved = localStorage.getItem("mascampo_movements_db");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        appState.movements = parsed;
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn("No se pudo cargar movimientos del Kardex de localStorage", e);
+  }
+}
+
+function saveMovementsToDisk() {
+  try {
+    localStorage.setItem("mascampo_movements_db", JSON.stringify(appState.movements));
+  } catch (e) {
+    console.error("Error guardando movimientos del Kardex en almacenamiento persistente", e);
+  }
+}
+
+function loadReservationsFromDisk() {
+  try {
+    const saved = localStorage.getItem("mascampo_reservations_db");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        appState.reservations = parsed;
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn("No se pudo cargar reservas de localStorage", e);
+  }
+}
+
+function saveReservationsToDisk() {
+  try {
+    localStorage.setItem("mascampo_reservations_db", JSON.stringify(appState.reservations));
+  } catch (e) {
+    console.error("Error guardando reservas en almacenamiento persistente", e);
+  }
+}
+
+function loadSerializedItemsFromDisk() {
+  try {
+    const saved = localStorage.getItem("mascampo_serialized_items_db");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        appState.serializedItems = parsed;
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn("No se pudo cargar equipos serializados de localStorage", e);
+  }
+}
+
+function saveSerializedItemsToDisk() {
+  try {
+    localStorage.setItem("mascampo_serialized_items_db", JSON.stringify(appState.serializedItems));
+  } catch (e) {
+    console.error("Error guardando equipos serializados en almacenamiento persistente", e);
+  }
+}
+
 function renderPendingValidationsView() {
   if (!appState.pendingIntakes) appState.pendingIntakes = [];
 
@@ -103769,6 +103886,9 @@ function approvePendingIntake(intakeId) {
 
     intake.status = "APROBADO";
     savePendingIntakesToDisk();
+    saveProductsToDisk();
+    saveMovementsToDisk();
+    saveSerializedItemsToDisk();
 
     addActivityLog("APROBACION", "InventoryIntake", `Administrador aprobó e ingresó ${intake.proposedQuantity} unidades de '${product.sku}' en sede '${intake.locationName}'.`);
 
