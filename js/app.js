@@ -98428,7 +98428,7 @@ const systemUsers = [
     firstName: "Leyla Caterine",
     lastName: "Bernal",
     document: "1020304050",
-    email: "mascmpo@gmail.com",
+    email: "mascampo@gmail.com",
     password: "$MAS_CAMPO_SECURE_SALT_2026$7ebedda5ac3020c1e30eb1eda96f7f99bf98de4214406df45d7997dff144b6fe",
     address: "Sede Principal Más Campo",
     phone: "3102607947",
@@ -98469,7 +98469,7 @@ const appState = {
     firstName: "Leyla Caterine",
     lastName: "Bernal",
     document: "1020304050",
-    email: "mascmpo@gmail.com",
+    email: "mascampo@gmail.com",
     role: "ADMINISTRADOR",
     vinculacion: "Gerente General",
     address: "Sede Principal Más Campo",
@@ -98571,6 +98571,33 @@ function saveAuditLogsToDisk() {
     localStorage.setItem("mascampo_audit_logs_db", JSON.stringify(appState.auditLogs));
   } catch (e) {
     console.error("Error guardando log de auditoría en almacenamiento persistente", e);
+  }
+}
+
+function loadUsersFromDisk() {
+  try {
+    const saved = localStorage.getItem("mascampo_users_db");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        parsed.forEach(u => {
+          if (u.email === "mascmpo@gmail.com") u.email = "mascampo@gmail.com";
+        });
+        appState.users = parsed;
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn("No se pudo cargar la lista de usuarios de localStorage", e);
+  }
+  appState.users = systemUsers;
+}
+
+function saveUsersToDisk() {
+  try {
+    localStorage.setItem("mascampo_users_db", JSON.stringify(appState.users));
+  } catch (e) {
+    console.error("Error guardando usuarios en almacenamiento local", e);
   }
 }
 
@@ -99434,6 +99461,7 @@ function handleLogout() {
 
 // Lifecycle
 document.addEventListener("DOMContentLoaded", () => {
+  loadUsersFromDisk();
   loadPersistedAuditLogs();
   loadPersistedPendingIntakes();
   ensureGlobalSerials();
@@ -100426,7 +100454,7 @@ function openUserModal(userId = null) {
     document.getElementById("userLastName").value = user.lastName || user.name.split(' ').slice(1).join(' ') || "";
     document.getElementById("userDocument").value = user.document || "";
     document.getElementById("userEmail").value = user.email || "";
-    document.getElementById("userPassword").value = user.password || "••••••••";
+    document.getElementById("userPassword").value = "••••••••";
     document.getElementById("userPhone").value = user.phone || "";
     document.getElementById("userAddress").value = user.address || "";
     document.getElementById("userVinculacion").value = user.vinculacion || "Planta (Nómina)";
@@ -100435,7 +100463,7 @@ function openUserModal(userId = null) {
     const isSuperAccount = (user.email === 'gerencia@softproductiva.com' || user.isSuperuser);
     const activeSelect = document.getElementById("userActive");
     if (activeSelect) {
-      activeSelect.value = "true";
+      activeSelect.value = user.active !== false ? "true" : "false";
       activeSelect.disabled = isSuperAccount;
     }
   } else {
@@ -100478,13 +100506,26 @@ async function handleSaveUser(e) {
       user.document = documentNum;
       user.email = email;
       if (password && password !== "••••••••") {
+        const pwdValidation = validatePasswordPolicy(password);
+        if (!pwdValidation.valid) {
+          alert(`⚠️ ERROR DE SEGURIDAD EN CONTRASEÑA:\n\n${pwdValidation.message}`);
+          return;
+        }
         user.password = await hashPassword(password);
+        user.mustChangePassword = false;
       }
       user.phone = phone;
       user.address = address;
       user.vinculacion = vinculacion;
       user.role = role;
       user.active = isSuperAccount ? true : activeInput;
+
+      if (appState.currentUser && (appState.currentUser.id === user.id || appState.currentUser.email === user.email)) {
+        appState.currentUser.email = user.email;
+        appState.currentUser.firstName = user.firstName;
+        appState.currentUser.lastName = user.lastName;
+        appState.currentUser.name = user.name;
+      }
 
       saveUsersToDisk();
       addActivityLog("MODIFICACION", "UserManagement", `Actualización de datos de usuario '${user.email}' (Vinculación: ${vinculacion}, Rol: ${role})`);
