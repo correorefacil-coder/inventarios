@@ -769,9 +769,10 @@
 
               <div class="form-group">
                 <label class="form-label">📎 Adjuntar Fotografías o Archivos de Soporte (Factura, Fotos de caja, DIAN, Remisión)</label>
-                <input type="file" id="movFilesInput" class="form-control" multiple accept="image/*, .pdf">
-                <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
-                  Puede seleccionar múltiples fotos o documentos PDF como respaldo inmutable de este movimiento.
+                <input type="file" id="movFilesInput" class="form-control" multiple accept="image/*, .pdf" onchange="renderSelectedFilesList(this)">
+                <div id="movFilesListPreview" style="margin-top: 0.35rem; display: flex; flex-wrap: wrap; gap: 0.35rem;"></div>
+                <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem; display: block;">
+                  Puede seleccionar uno o múltiples fotos o documentos PDF como respaldo inmutable de este movimiento.
                 </span>
               </div>
 

@@ -102336,6 +102336,8 @@ function handleCreateMovement(e) {
 
     alert(`✅ Movimiento registrado exitosamente con ${attachments.length} soportes adjuntos.`);
     document.getElementById("movementForm").reset();
+    const filePrev = document.getElementById("movFilesListPreview");
+    if (filePrev) filePrev.innerHTML = "";
     populateDropdowns();
     renderAllViews();
   };
@@ -102359,9 +102361,25 @@ function handleCreateMovement(e) {
       reader.readAsDataURL(f);
     }
   } else {
-    attachments.push({ name: `Comprobante_${type}_${invoice || 'DOC'}.pdf`, type: 'pdf', icon: '📄' });
     processFiles();
   }
+}
+
+function renderSelectedFilesList(input) {
+  const container = document.getElementById("movFilesListPreview");
+  if (!container) return;
+  if (!input.files || input.files.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+  const filesArray = Array.from(input.files);
+  container.innerHTML = filesArray.map(f => {
+    const isImg = f.type.includes("image");
+    const icon = isImg ? "📷" : "📄";
+    return `<span class="badge" style="background: rgba(16, 185, 129, 0.15); border: 1px solid var(--accent-green); color: var(--accent-green); font-size: 0.75rem; padding: 0.25rem 0.5rem; display: inline-flex; align-items: center; gap: 0.25rem;">
+      ${icon} ${f.name} (${(f.size / 1024).toFixed(1)} KB)
+    </span>`;
+  }).join('');
 }
 
 function renderKardex() {
@@ -103597,6 +103615,11 @@ function loadMovementsFromDisk() {
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
+        parsed.forEach(m => {
+          if (m.attachments && Array.isArray(m.attachments)) {
+            m.attachments = m.attachments.filter(a => a.dataUrl || (a.name && !a.name.startsWith("Comprobante_")));
+          }
+        });
         appState.movements = parsed;
         return;
       }
