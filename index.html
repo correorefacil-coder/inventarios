@@ -67,7 +67,12 @@
 
         <div class="login-field">
           <label class="login-label" for="loginPassword">Contraseña:</label>
-          <input type="password" id="loginPassword" class="login-input" required autocomplete="current-password" placeholder="••••••••">
+          <div style="position: relative; display: flex; align-items: center;">
+            <input type="password" id="loginPassword" class="login-input" required autocomplete="current-password" placeholder="••••••••" style="padding-right: 2.5rem; width: 100%;">
+            <button type="button" id="togglePasswordBtn" onclick="togglePasswordVisibility(); return false;" style="position: absolute; right: 0.5rem; background: none; border: none; font-size: 1.2rem; cursor: pointer; color: var(--text-muted); padding: 0.2rem 0.4rem; z-index: 10; user-select: none;" title="Mostrar/Ocultar contraseña">
+              👁️
+            </button>
+          </div>
         </div>
 
         <button type="submit" class="login-btn">
@@ -953,6 +958,7 @@
                     <th>Nombre / Razón Social</th>
                     <th>Ciudad</th>
                     <th>Teléfono</th>
+                    <th>Régimen IVA</th>
                     <th>Total Compras</th>
                     <th style="text-align: center; width: 150px;">Acciones</th>
                   </tr>
@@ -1785,7 +1791,7 @@
                 <option value="CE">CE (Cédula de extranjería)</option>
                 <option value="DIE">DIE (Documento de identificación extranjero)</option>
                 <option value="NIT">NIT (NIT)</option>
-                <option value="NPE">NPE (Nit de otro país / Sin identificación del exterior (43 medios magnéticos))</option>
+                <option value="NPE">NPE (Nit de otro país / Sin identificación del exterior)</option>
                 <option value="PP">PP (Pasaporte)</option>
                 <option value="TE">TE (Tarjeta de extranjería)</option>
                 <option value="TI">TI (Tarjeta de identidad)</option>
@@ -1801,18 +1807,46 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label">Nombre Completo / Razón Social *</label>
+            <label class="form-label">Nombre Tercero / Razón Social *</label>
             <input type="text" id="customerModalName" class="form-control" required placeholder="Ej. FINCA DON PEDRO PMO S.A.S">
           </div>
 
           <div class="form-row">
             <div class="form-group">
+              <label class="form-label">Tipo de Régimen IVA</label>
+              <select id="customerModalRegimenIva" class="form-control">
+                <option value="Responsable de IVA">Responsable de IVA</option>
+                <option value="No responsable de IVA">No responsable de IVA</option>
+                <option value="Gran Contribuyente">Gran Contribuyente</option>
+                <option value="Régimen Simple">Régimen Simple</option>
+                <option value="Especial">Especial</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Sucursal</label>
+              <input type="text" id="customerModalSucursal" class="form-control" placeholder="Ej. Principal / Sede Norte">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Dirección</label>
+              <input type="text" id="customerModalAddress" class="form-control" placeholder="Ej. Carrera 15 # 45-20">
+            </div>
+            <div class="form-group">
               <label class="form-label">Ciudad / Municipio</label>
               <input type="text" id="customerModalCity" class="form-control" placeholder="Ej. Villavicencio">
             </div>
+          </div>
+
+          <div class="form-row">
             <div class="form-group">
               <label class="form-label">Teléfono / WhatsApp</label>
               <input type="text" id="customerModalPhone" class="form-control" placeholder="Ej. +57 310 456 7890">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Nombres de Contacto</label>
+              <input type="text" id="customerModalContact" class="form-control" placeholder="Ej. Pedro Pérez">
             </div>
           </div>
 
@@ -1822,14 +1856,17 @@
               <input type="email" id="customerModalEmail" class="form-control" placeholder="Ej. contacto@empresa.com">
             </div>
             <div class="form-group">
-              <label class="form-label">Dirección</label>
-              <input type="text" id="customerModalAddress" class="form-control" placeholder="Ej. Carrera 15 # 45-20">
+              <label class="form-label">Estado</label>
+              <select id="customerModalStatus" class="form-control">
+                <option value="Activo">Activo</option>
+                <option value="Inactivo">Inactivo</option>
+              </select>
             </div>
           </div>
 
           <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
             <button type="button" class="btn btn-secondary" onclick="closeCustomerModal()">Cancelar</button>
-            <button type="submit" class="btn btn-primary">💾 Guardar Cliente</button>
+            <button type="submit" class="btn btn-primary">💾 Guardar Cliente / Tercero</button>
           </div>
         </form>
       </div>
@@ -2298,6 +2335,22 @@
 
   </div>
 
-  <script src="js/app.js"></script>
+  <script>
+    window.togglePasswordVisibility = function() {
+      var pwdInput = document.getElementById("loginPassword");
+      var toggleBtn = document.getElementById("togglePasswordBtn");
+      if (!pwdInput) return;
+      if (pwdInput.type === "password" || pwdInput.getAttribute("type") === "password") {
+        pwdInput.setAttribute("type", "text");
+        pwdInput.type = "text";
+        if (toggleBtn) toggleBtn.textContent = "🙈";
+      } else {
+        pwdInput.setAttribute("type", "password");
+        pwdInput.type = "password";
+        if (toggleBtn) toggleBtn.textContent = "👁️";
+      }
+    };
+  </script>
+  <script src="js/app.js?v=20260824_cust_v1"></script>
 </body>
 </html>
