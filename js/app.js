@@ -98539,7 +98539,6 @@ function getClientIp() {
 function loadPersistedAuditLogs() {
   try {
     const saved = localStorage.getItem("mascampo_audit_logs_db");
-    const oneHourAgoMs = Date.now() - (60 * 60 * 1000); // 1 hour ago limit
 
     let logs = [];
     if (saved) {
@@ -98547,16 +98546,13 @@ function loadPersistedAuditLogs() {
       if (Array.isArray(parsed)) logs = parsed;
     }
 
-    // Filter logs to keep ONLY events from the last 1 hour and exclude old demo users
+    // Keep all logs unlimitedly (excluding old hardcoded demo user logs)
     appState.auditLogs = logs.filter(log => {
       if (!log || !log.timestamp) return false;
       if (log.userName === 'Carlos Mendoza' || log.userEmail === 'admin@mascampo.co' || (log.description && log.description.includes('admin@mascampo.co'))) {
         return false;
       }
-      
-      const logDate = new Date(log.timestamp.replace(' ', 'T'));
-      if (isNaN(logDate.getTime())) return false;
-      return logDate.getTime() >= oneHourAgoMs;
+      return true;
     });
 
     saveAuditLogsToDisk();
