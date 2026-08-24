@@ -104823,6 +104823,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadPersistedAuditLogs();
   loadPersistedPendingIntakes();
   loadProductsFromDisk();
+  loadCustomersFromDisk();
   loadMovementsFromDisk();
   loadReservationsFromDisk();
   loadSerializedItemsFromDisk();
@@ -105441,6 +105442,7 @@ function handleSaveCustomer(event) {
   }
 
   closeCustomerModal();
+  saveCustomersToDisk();
   renderCustomers();
   populateCustomerDropdowns();
 }
@@ -106466,6 +106468,7 @@ function processAutomatedSigoReport(fileName) {
 
   alert(alertMessage);
 
+  saveCustomersToDisk();
   populateDropdowns();
   renderAllViews();
 }
@@ -109051,6 +109054,61 @@ function saveSerializedItemsToDisk() {
     localStorage.setItem("mascampo_serialized_items_db", JSON.stringify(appState.serializedItems));
   } catch (e) {
     console.error("Error guardando equipos serializados en almacenamiento persistente", e);
+  }
+}
+
+function loadCustomersFromDisk() {
+  try {
+    const saved = localStorage.getItem("mascampo_customers_db");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        appState.customers = parsed;
+        return;
+      }
+    }
+    const userAdded = localStorage.getItem("mascampo_custom_added_customers_db");
+    if (userAdded) {
+      const addedParsed = JSON.parse(userAdded);
+      if (Array.isArray(addedParsed) && addedParsed.length > 0) {
+        const base = (typeof excelIngestedCustomers !== 'undefined' && Array.isArray(excelIngestedCustomers)) 
+          ? [...excelIngestedCustomers] 
+          : [];
+        const existingIds = new Set(base.map(c => c.id));
+        addedParsed.forEach(c => {
+          if (existingIds.has(c.id)) {
+            const idx = base.findIndex(b => b.id === c.id);
+            if (idx !== -1) base[idx] = c;
+          } else {
+            base.unshift(c);
+          }
+        });
+        appState.customers = base;
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn("No se pudo cargar clientes de localStorage", e);
+  }
+  if (!appState.customers || appState.customers.length === 0) {
+    appState.customers = (typeof excelIngestedCustomers !== 'undefined' && Array.isArray(excelIngestedCustomers)) 
+      ? [...excelIngestedCustomers] 
+      : [];
+  }
+}
+
+function saveCustomersToDisk() {
+  if (!appState.customers || !Array.isArray(appState.customers)) return;
+  try {
+    localStorage.setItem("mascampo_customers_db", JSON.stringify(appState.customers));
+  } catch (e) {
+    console.warn("localStorage quota exceeded for full customer list, saving custom deltas:", e);
+  }
+  try {
+    const customList = appState.customers.filter(c => !c.id || !String(c.id).startsWith("cust-xl-") || c._isModified);
+    localStorage.setItem("mascampo_custom_added_customers_db", JSON.stringify(customList));
+  } catch (err) {
+    console.error("Error guardando clientes personalizados en localStorage:", err);
   }
 }
 
