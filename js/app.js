@@ -107821,7 +107821,15 @@ function handleCreateMovement(e) {
   if (type === 'SALIDA_VENTA') {
     const available = product.physicalStock - product.reservedStock;
     if (qty > available) {
-      alert(`⚠️ ERROR DE STOCK: El producto ${product.sku} solo tiene ${available} unidades disponibles.`);
+      alert(`⚠️ ERROR DE STOCK: El producto ${product.sku} solo tiene ${available} unidades disponibles (${product.physicalStock} físicas - ${product.reservedStock} reservadas).`);
+      return;
+    }
+  }
+
+  if (type === 'AJUSTE_QUITAR') {
+    const currentStock = product.physicalStock || 0;
+    if (qty > currentStock) {
+      alert(`⚠️ ERROR DE AJUSTE: No puede quitar ${qty} unidades. El producto ${product.sku} actualmente solo tiene ${currentStock} unidades en inventario físico.`);
       return;
     }
   }
@@ -107871,10 +107879,10 @@ function handleCreateMovement(e) {
   ensureProductLocations();
   if (!product.stockByLocation) product.stockByLocation = {};
 
-  if (type === 'INGRESO_COMPRA' || type === 'ENTRADA') {
+  if (type === 'INGRESO_COMPRA' || type === 'ENTRADA' || type === 'AJUSTE_AGREGAR') {
     product.physicalStock = (product.physicalStock || 0) + qty;
     product.stockByLocation["loc-1"] = (product.stockByLocation["loc-1"] || 0) + qty;
-  } else if (type === 'SALIDA_VENTA' || type === 'GARANTIA_REEMPLAZO' || type === 'SALIDA') {
+  } else if (type === 'SALIDA_VENTA' || type === 'GARANTIA_REEMPLAZO' || type === 'SALIDA' || type === 'AJUSTE_QUITAR') {
     product.physicalStock = Math.max(0, (product.physicalStock || 0) - qty);
     product.stockByLocation["loc-1"] = Math.max(0, (product.stockByLocation["loc-1"] || 0) - qty);
   } else if (type === 'AJUSTE') {
@@ -107956,7 +107964,21 @@ function renderKardex() {
     return `
       <tr>
         <td><strong>${m.date}</strong></td>
-        <td><span class="badge ${m.type === 'INGRESO_COMPRA' ? 'badge-green' : m.type === 'SALIDA_VENTA' ? 'badge-blue' : 'badge-amber'}">${m.type}</span></td>
+        <td>
+          <span class="badge ${
+            m.type === 'INGRESO_COMPRA' ? 'badge-green' :
+            m.type === 'SALIDA_VENTA' ? 'badge-blue' :
+            m.type === 'AJUSTE_AGREGAR' ? 'badge-purple' :
+            m.type === 'AJUSTE_QUITAR' ? 'badge-red' :
+            'badge-amber'
+          }">
+            ${
+              m.type === 'AJUSTE_AGREGAR' ? '➕ AJUSTE (+)' :
+              m.type === 'AJUSTE_QUITAR' ? '➖ AJUSTE (-)' :
+              m.type
+            }
+          </span>
+        </td>
         <td><strong>${prod ? prod.sku : ''}</strong> - ${prod ? prod.name : ''}</td>
         <td><strong>${m.quantity}</strong></td>
         <td>${m.invoiceNumber || '-'}</td>
