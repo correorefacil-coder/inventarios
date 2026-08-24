@@ -107897,8 +107897,8 @@ function handleCreateMovement(e) {
     productId: prodId,
     quantity: qty,
     invoiceNumber: invoice || null,
-    customerName: customer ? customer.name : 'Venta General',
-    user: appState.currentUser.name,
+    customerName: customer ? customer.name : (type === 'SALIDA_VENTA' ? 'Venta General' : null),
+    user: appState.currentUser ? appState.currentUser.name : 'Usuario',
     notes,
     attachments
   };
