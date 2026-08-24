@@ -99740,6 +99740,22 @@ function populateDropdowns() {
   if (movCustomerSelect) movCustomerSelect.innerHTML = customerOptions;
   if (resCustomerSelect) resCustomerSelect.innerHTML = customerOptions;
 
+  const resCustomerList = document.getElementById("resCustomerList");
+  if (resCustomerList) {
+    resCustomerList.innerHTML = appState.customers.map(c => {
+      const docLabel = c.documentType === "NIT" ? `NIT ${c.documentNumber}-${c.verificationDigit}` : `CC ${c.documentNumber}`;
+      return `<option value="${c.name} (${docLabel})">`;
+    }).join('');
+  }
+
+  const resProductList = document.getElementById("resProductList");
+  if (resProductList) {
+    resProductList.innerHTML = appState.products.map(p => {
+      const avail = Math.max(0, p.physicalStock - p.reservedStock);
+      return `<option value="${p.sku} - ${p.name} (Stock Disp: ${avail})">`;
+    }).join('');
+  }
+
   const equipmentSerialSelect = document.getElementById("equipmentSerialSelect");
   if (equipmentSerialSelect) {
     equipmentSerialSelect.innerHTML = appState.serializedItems.map(item => {
@@ -102467,12 +102483,48 @@ function renderReservations() {
 
 function handleCreateReservation(e) {
   e.preventDefault();
-  const customerId = document.getElementById("resCustomerSelect").value;
-  const productId = document.getElementById("resProductSelect").value;
+  let customerId = document.getElementById("resCustomerSelect") ? document.getElementById("resCustomerSelect").value : "";
+  let productId = document.getElementById("resProductSelect") ? document.getElementById("resProductSelect").value : "";
+
+  const custInputVal = (document.getElementById("resCustomerInput")?.value || "").trim().toLowerCase();
+  const prodInputVal = (document.getElementById("resProductInput")?.value || "").trim().toLowerCase();
+
+  if (!customerId && custInputVal) {
+    const match = appState.customers.find(c => {
+      const docLabel = c.documentType === "NIT" ? `nit ${c.documentNumber}` : `cc ${c.documentNumber}`;
+      const text = `${c.name} (${docLabel})`.toLowerCase();
+      return text.includes(custInputVal) || c.name.toLowerCase().includes(custInputVal) || (c.documentNumber && c.documentNumber.includes(custInputVal));
+    });
+    if (match) customerId = match.id;
+  }
+
+  if (!productId && prodInputVal) {
+    const match = appState.products.find(p => {
+      const text = `${p.sku} - ${p.name}`.toLowerCase();
+      return text.includes(prodInputVal) || p.sku.toLowerCase().includes(prodInputVal) || p.name.toLowerCase().includes(prodInputVal);
+    });
+    if (match) productId = match.id;
+  }
+
+  if (!customerId) {
+    alert("⚠️ Por favor busque y seleccione un cliente válido de la lista.");
+    return;
+  }
+
+  if (!productId) {
+    alert("⚠️ Por favor busque y seleccione un producto válido de la lista.");
+    return;
+  }
+
   const quantity = parseInt(document.getElementById("resQuantity").value);
   const reason = document.getElementById("resReason").value;
 
   const product = appState.products.find(p => p.id === productId);
+  if (!product) {
+    alert("⚠️ Producto no encontrado.");
+    return;
+  }
+
   const availableStock = product.physicalStock - product.reservedStock;
 
   if (quantity > availableStock) {
@@ -102500,6 +102552,97 @@ function handleCreateReservation(e) {
   populateDropdowns();
   renderAllViews();
 }
+
+function filterResCustomerAutocomplete(query = "") {
+  const panel = document.getElementById("resCustomerDropdown");
+  if (!panel) return;
+  const q = (query || "").toLowerCase().trim();
+  const customers = appState.customers || [];
+  const filtered = customers.filter(c => {
+    if (!q) return true;
+    const docLabel = c.documentType === "NIT" ? `NIT ${c.documentNumber}-${c.verificationDigit}` : `CC ${c.documentNumber}`;
+    const full = `${c.name} ${docLabel} ${c.email || ''}`.toLowerCase();
+    return full.includes(q);
+  });
+
+  if (filtered.length === 0) {
+    panel.innerHTML = `<div style="padding:0.6rem 0.8rem; font-size:0.82rem; color:var(--text-muted, #94a3b8);">No se encontraron clientes</div>`;
+    panel.style.display = "block";
+    return;
+  }
+
+  panel.innerHTML = filtered.slice(0, 15).map(c => {
+    const docLabel = c.documentType === "NIT" ? `NIT ${c.documentNumber}-${c.verificationDigit}` : `CC ${c.documentNumber}`;
+    const labelText = `${c.name} (${docLabel})`;
+    const safeLabel = labelText.replace(/'/g, "\\'");
+    return `<div class="autocomplete-dropdown-item" onclick="selectResCustomer('${c.id}', '${safeLabel}')">
+      <div><strong>${c.name}</strong> <span style="font-size:0.78rem; opacity:0.8;">(${docLabel})</span></div>
+    </div>`;
+  }).join('');
+  panel.style.display = "block";
+}
+
+function selectResCustomer(id, text) {
+  const custInput = document.getElementById("resCustomerInput");
+  const custSelect = document.getElementById("resCustomerSelect");
+  const panel = document.getElementById("resCustomerDropdown");
+  if (custInput) custInput.value = text;
+  if (custSelect) custSelect.value = id;
+  if (panel) panel.style.display = "none";
+}
+
+function filterResProductAutocomplete(query = "") {
+  const panel = document.getElementById("resProductDropdown");
+  if (!panel) return;
+  const q = (query || "").toLowerCase().trim();
+  const products = appState.products || [];
+  const filtered = products.filter(p => {
+    if (!q) return true;
+    const full = `${p.sku} ${p.name} ${p.description || ''} ${p.brand || ''}`.toLowerCase();
+    return full.includes(q);
+  });
+
+  if (filtered.length === 0) {
+    panel.innerHTML = `<div style="padding:0.6rem 0.8rem; font-size:0.82rem; color:var(--text-muted, #94a3b8);">No se encontraron productos</div>`;
+    panel.style.display = "block";
+    return;
+  }
+
+  panel.innerHTML = filtered.slice(0, 20).map(p => {
+    const avail = Math.max(0, p.physicalStock - p.reservedStock);
+    const labelText = `${p.sku} - ${p.name}`;
+    const safeLabel = labelText.replace(/'/g, "\\'");
+    return `<div class="autocomplete-dropdown-item" onclick="selectResProduct('${p.id}', '${safeLabel}')">
+      <div>
+        <strong style="color:var(--accent-green, #10b981);">${p.sku}</strong> - ${p.name}
+      </div>
+      <span class="badge-stock">Disp: ${avail}</span>
+    </div>`;
+  }).join('');
+  panel.style.display = "block";
+}
+
+function selectResProduct(id, text) {
+  const prodInput = document.getElementById("resProductInput");
+  const prodSelect = document.getElementById("resProductSelect");
+  const panel = document.getElementById("resProductDropdown");
+  if (prodInput) prodInput.value = text;
+  if (prodSelect) prodSelect.value = id;
+  if (panel) panel.style.display = "none";
+}
+
+document.addEventListener("click", function(e) {
+  const custInput = document.getElementById("resCustomerInput");
+  const prodInput = document.getElementById("resProductInput");
+  if (custInput && !custInput.closest(".form-group").contains(e.target)) {
+    const panel = document.getElementById("resCustomerDropdown");
+    if (panel) panel.style.display = "none";
+  }
+  if (prodInput && !prodInput.closest(".form-group").contains(e.target)) {
+    const panel = document.getElementById("resProductDropdown");
+    if (panel) panel.style.display = "none";
+  }
+});
 
 function cancelReservation(resId) {
   const res = appState.reservations.find(r => r.id === resId);
@@ -103324,6 +103467,19 @@ function handleUpdateProduct(e) {
 
 function openReservationModal() {
   document.getElementById("reservationModal").classList.add("active");
+  const custInput = document.getElementById("resCustomerInput");
+  const prodInput = document.getElementById("resProductInput");
+  const custSelect = document.getElementById("resCustomerSelect");
+  const prodSelect = document.getElementById("resProductSelect");
+  const custPanel = document.getElementById("resCustomerDropdown");
+  const prodPanel = document.getElementById("resProductDropdown");
+  if (custInput) custInput.value = "";
+  if (prodInput) prodInput.value = "";
+  if (custSelect) custSelect.value = "";
+  if (prodSelect) prodSelect.value = "";
+  if (custPanel) custPanel.style.display = "none";
+  if (prodPanel) prodPanel.style.display = "none";
+  populateDropdowns();
 }
 
 function closeReservationModal() {
