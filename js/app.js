@@ -103914,12 +103914,11 @@ function loadPersistedAuditLogs() {
   }
 }
 
-function saveAuditLogsToDisk() {
+async function saveAuditLogsToDisk() {
+  try { localStorage.setItem("mascampo_audit_logs_db", JSON.stringify(appState.auditLogs)); } catch {}
   try {
-    localStorage.setItem("mascampo_audit_logs_db", JSON.stringify(appState.auditLogs));
-  } catch (e) {
-    console.error("Error guardando log de auditoría en almacenamiento persistente", e);
-  }
+    if (await checkBackendOnline()) await _apiPost('/audit-logs', appState.auditLogs.slice(0, 100));
+  } catch (e) { console.warn('saveAuditLogsToDisk API:', e.message); }
 }
 
 function loadUsersFromDisk() {
@@ -103976,19 +103975,12 @@ function loadUsersFromDisk() {
   saveUsersToDisk();
 }
 
-function saveUsersToDisk() {
+async function saveUsersToDisk() {
   if (!appState.users || !Array.isArray(appState.users)) return;
+  try { localStorage.setItem("mascampo_users_db", JSON.stringify(appState.users)); } catch {}
   try {
-    localStorage.setItem("mascampo_users_db", JSON.stringify(appState.users));
-  } catch (e) {
-    console.warn("Error guardando base completa de usuarios en localStorage:", e);
-  }
-  try {
-    const customUsers = appState.users.filter(u => !['usr-super', 'usr-leyla', 'usr-2', 'usr-3'].includes(u.id));
-    localStorage.setItem("mascampo_custom_users_db", JSON.stringify(customUsers));
-  } catch (err) {
-    console.error("Error guardando usuarios personalizados en almacenamiento persistente:", err);
-  }
+    if (await checkBackendOnline()) await _apiPost('/users', appState.users);
+  } catch (e) { console.warn('saveUsersToDisk API:', e.message); }
 }
 
 function downloadAuditLogsJSONFile() {
@@ -104850,7 +104842,8 @@ function handleLogout() {
 }
 
 // Lifecycle
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  // 1. Carga inicial síncrona de respaldo local
   loadUsersFromDisk();
   loadPersistedAuditLogs();
   loadPersistedPendingIntakes();
@@ -104860,6 +104853,11 @@ document.addEventListener("DOMContentLoaded", () => {
   loadReservationsFromDisk();
   loadSerializedItemsFromDisk();
   ensureGlobalSerials();
+
+  // 2. Carga prioritaria asíncrona desde BD SQLite en disco si el backend está activo
+  await loadAllFromAPI();
+
+  // 3. Inicialización de componentes e interfaz con los datos más recientes de la base de datos
   initThemeManager();
   initRoleSwitcher();
   initNavigation();
@@ -109183,6 +109181,99 @@ function savePendingIntakesToDisk() {
   }
 }
 
+// Configuración de URL base de la API:
+// Si corre en localhost sin puerto 5000 usa localhost:5000. Si está en un servidor remoto con reverse proxy (Nginx), usa '/api'.
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? (window.location.port === '5000' ? '/api' : 'http://localhost:5000/api')
+  : `${window.location.origin}/api`;
+let _backendOnline = null; // null=sin probar, true/false=resultado
+
+async function checkBackendOnline() {
+  if (_backendOnline !== null) return _backendOnline;
+  try {
+    const r = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(1500) });
+    _backendOnline = r.ok;
+  } catch { _backendOnline = false; }
+  if (!_backendOnline) {
+    console.warn('⚠️ Backend offline — datos en localStorage (temporal). Ejecute iniciar_backend.bat');
+  } else {
+    console.info('✅ Backend online — guardando en SQLite (mascampo.db)');
+  }
+  return _backendOnline;
+}
+
+async function _apiGet(endpoint) {
+  const r = await fetch(`${API_BASE}${endpoint}`, { signal: AbortSignal.timeout(5000) });
+  if (!r.ok) throw new Error(`API GET ${endpoint} → ${r.status}`);
+  return r.json();
+}
+
+async function _apiPost(endpoint, payload) {
+  const r = await fetch(`${API_BASE}${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(10000)
+  });
+  if (!r.ok) throw new Error(`API POST ${endpoint} → ${r.status}`);
+  return r.json();
+}
+
+// ── CARGA INICIAL DESDE API ─────────────────────────────────
+// Llamada principal en DOMContentLoaded — carga todo desde la BD real
+async function loadAllFromAPI() {
+  const online = await checkBackendOnline();
+  if (!online) return; // sin backend, ya se cargó desde localStorage abajo
+
+  try {
+    const [users, products, movements, customers, reservations, serials, categories] = await Promise.all([
+      _apiGet('/users'),
+      _apiGet('/products'),
+      _apiGet('/movements'),
+      _apiGet('/customers'),
+      _apiGet('/reservations'),
+      _apiGet('/serialized-items'),
+      _apiGet('/categories'),
+    ]);
+
+    if (Array.isArray(users) && users.length > 0) {
+      appState.users = users;
+      localStorage.setItem("mascampo_users_db", JSON.stringify(users));
+    }
+    if (Array.isArray(products) && products.length > 0) {
+      appState.products = products;
+      localStorage.setItem("mascampo_products_db", JSON.stringify(products));
+    }
+    if (Array.isArray(movements)) {
+      appState.movements = movements;
+      localStorage.setItem("mascampo_movements_db", JSON.stringify(movements));
+    }
+    if (Array.isArray(customers) && customers.length > 0) {
+      appState.customers = customers;
+      localStorage.setItem("mascampo_customers_db", JSON.stringify(customers));
+    }
+    if (Array.isArray(reservations)) {
+      appState.reservations = reservations;
+      localStorage.setItem("mascampo_reservations_db", JSON.stringify(reservations));
+    }
+    if (Array.isArray(serials) && serials.length > 0) {
+      appState.serializedItems = serials;
+      localStorage.setItem("mascampo_serialized_items_db", JSON.stringify(serials));
+    }
+    if (Array.isArray(categories) && categories.length > 0) {
+      if (!appState.categories) appState.categories = [];
+      appState.categories = categories;
+    }
+
+    console.info(`✅ Datos cargados desde BD SQLite: ${products.length} productos, ${movements.length} movimientos, ${users.length} usuarios, ${customers.length} clientes`);
+    renderAllViews();
+  } catch (err) {
+    console.error('Error cargando datos desde API:', err);
+  }
+}
+
+// ── PRODUCTOS ───────────────────────────────────────────────
+
 function loadProductsFromDisk() {
   try {
     const saved = localStorage.getItem("mascampo_products_db");
@@ -109198,12 +109289,11 @@ function loadProductsFromDisk() {
   }
 }
 
-function saveProductsToDisk() {
+async function saveProductsToDisk() {
+  try { localStorage.setItem("mascampo_products_db", JSON.stringify(appState.products)); } catch {}
   try {
-    localStorage.setItem("mascampo_products_db", JSON.stringify(appState.products));
-  } catch (e) {
-    console.error("Error guardando productos en almacenamiento persistente", e);
-  }
+    if (await checkBackendOnline()) await _apiPost('/products', appState.products);
+  } catch (e) { console.warn('saveProductsToDisk API:', e.message); }
 }
 
 function loadMovementsFromDisk() {
@@ -109226,12 +109316,11 @@ function loadMovementsFromDisk() {
   }
 }
 
-function saveMovementsToDisk() {
+async function saveMovementsToDisk() {
+  try { localStorage.setItem("mascampo_movements_db", JSON.stringify(appState.movements)); } catch {}
   try {
-    localStorage.setItem("mascampo_movements_db", JSON.stringify(appState.movements));
-  } catch (e) {
-    console.error("Error guardando movimientos del Kardex en almacenamiento persistente", e);
-  }
+    if (await checkBackendOnline()) await _apiPost('/movements', appState.movements);
+  } catch (e) { console.warn('saveMovementsToDisk API:', e.message); }
 }
 
 function loadReservationsFromDisk() {
@@ -109249,12 +109338,11 @@ function loadReservationsFromDisk() {
   }
 }
 
-function saveReservationsToDisk() {
+async function saveReservationsToDisk() {
+  try { localStorage.setItem("mascampo_reservations_db", JSON.stringify(appState.reservations)); } catch {}
   try {
-    localStorage.setItem("mascampo_reservations_db", JSON.stringify(appState.reservations));
-  } catch (e) {
-    console.error("Error guardando reservas en almacenamiento persistente", e);
-  }
+    if (await checkBackendOnline()) await _apiPost('/reservations', appState.reservations);
+  } catch (e) { console.warn('saveReservationsToDisk API:', e.message); }
 }
 
 function loadSerializedItemsFromDisk() {
@@ -109272,12 +109360,11 @@ function loadSerializedItemsFromDisk() {
   }
 }
 
-function saveSerializedItemsToDisk() {
+async function saveSerializedItemsToDisk() {
+  try { localStorage.setItem("mascampo_serialized_items_db", JSON.stringify(appState.serializedItems)); } catch {}
   try {
-    localStorage.setItem("mascampo_serialized_items_db", JSON.stringify(appState.serializedItems));
-  } catch (e) {
-    console.error("Error guardando equipos serializados en almacenamiento persistente", e);
-  }
+    if (await checkBackendOnline()) await _apiPost('/serialized-items', appState.serializedItems);
+  } catch (e) { console.warn('saveSerializedItemsToDisk API:', e.message); }
 }
 
 function loadCustomersFromDisk() {
@@ -109294,8 +109381,8 @@ function loadCustomersFromDisk() {
     if (userAdded) {
       const addedParsed = JSON.parse(userAdded);
       if (Array.isArray(addedParsed) && addedParsed.length > 0) {
-        const base = (typeof excelIngestedCustomers !== 'undefined' && Array.isArray(excelIngestedCustomers)) 
-          ? [...excelIngestedCustomers] 
+        const base = (typeof excelIngestedCustomers !== 'undefined' && Array.isArray(excelIngestedCustomers))
+          ? [...excelIngestedCustomers]
           : [];
         const existingIds = new Set(base.map(c => c.id));
         addedParsed.forEach(c => {
@@ -109314,25 +109401,18 @@ function loadCustomersFromDisk() {
     console.warn("No se pudo cargar clientes de localStorage", e);
   }
   if (!appState.customers || appState.customers.length === 0) {
-    appState.customers = (typeof excelIngestedCustomers !== 'undefined' && Array.isArray(excelIngestedCustomers)) 
-      ? [...excelIngestedCustomers] 
+    appState.customers = (typeof excelIngestedCustomers !== 'undefined' && Array.isArray(excelIngestedCustomers))
+      ? [...excelIngestedCustomers]
       : [];
   }
 }
 
-function saveCustomersToDisk() {
+async function saveCustomersToDisk() {
   if (!appState.customers || !Array.isArray(appState.customers)) return;
+  try { localStorage.setItem("mascampo_customers_db", JSON.stringify(appState.customers)); } catch {}
   try {
-    localStorage.setItem("mascampo_customers_db", JSON.stringify(appState.customers));
-  } catch (e) {
-    console.warn("localStorage quota exceeded for full customer list, saving custom deltas:", e);
-  }
-  try {
-    const customList = appState.customers.filter(c => !c.id || !String(c.id).startsWith("cust-xl-") || c._isModified);
-    localStorage.setItem("mascampo_custom_added_customers_db", JSON.stringify(customList));
-  } catch (err) {
-    console.error("Error guardando clientes personalizados en localStorage:", err);
-  }
+    if (await checkBackendOnline()) await _apiPost('/customers', appState.customers);
+  } catch (e) { console.warn('saveCustomersToDisk API:', e.message); }
 }
 
 function renderPendingValidationsView() {
