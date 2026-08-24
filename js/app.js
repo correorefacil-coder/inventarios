@@ -98428,7 +98428,7 @@ const systemUsers = [
     firstName: "Leyla Caterine",
     lastName: "Bernal",
     document: "1020304050",
-    email: "mascampo@gmail.com",
+    email: "mascmpo@gmail.com",
     password: "$MAS_CAMPO_SECURE_SALT_2026$7ebedda5ac3020c1e30eb1eda96f7f99bf98de4214406df45d7997dff144b6fe",
     address: "Sede Principal Más Campo",
     phone: "3102607947",
@@ -98578,7 +98578,8 @@ function loadUsersFromDisk() {
       if (Array.isArray(parsed) && parsed.length > 0) {
         parsed.forEach(u => {
           if (u.email === "mascmpo@gmail.com" || u.email === "mascampo@gmail.com" || u.id === "usr-leyla") {
-            u.email = "mascampo@gmail.com";
+            u.email = "mascmpo@gmail.com";
+            u.role = "ADMINISTRADOR";
             u.active = true;
             u.mustChangePassword = false;
             if (!u.password || typeof u.password !== 'string' || !u.password.startsWith('$MAS_CAMPO_SECURE_SALT_2026$')) {
@@ -98587,6 +98588,7 @@ function loadUsersFromDisk() {
           }
         });
         appState.users = parsed;
+        saveUsersToDisk();
         return;
       }
     }
@@ -98594,6 +98596,7 @@ function loadUsersFromDisk() {
     console.warn("No se pudo cargar la lista de usuarios de localStorage", e);
   }
   appState.users = systemUsers;
+  saveUsersToDisk();
 }
 
 function saveUsersToDisk() {
@@ -99323,7 +99326,7 @@ async function handleLoginSubmit(event) {
         uFirstName === userInput ||
         uLastName === userInput ||
         uFullName === userInput ||
-        (userInput === "mascampo@gmail.com" && uEmail === "mascmpo@gmail.com") ||
+        ((userInput === "mascampo@gmail.com" || userInput === "mascmpo@gmail.com") && (uEmail === "mascmpo@gmail.com" || uEmail === "mascampo@gmail.com")) ||
         (userInput === "superusuario" && (uEmail === "gerencia@softproductiva.com" || uId === "usr-super"));
 
       if (isUserMatch) {
