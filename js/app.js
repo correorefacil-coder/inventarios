@@ -107573,6 +107573,63 @@ function handleProductSelectForMovement() {
   }
 }
 
+let pendingMovementAttachments = [];
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function renderSelectedFilesList(input) {
+  if (!input || !input.files || input.files.length === 0) return;
+
+  const newFiles = Array.from(input.files);
+  for (const f of newFiles) {
+    const alreadyExists = pendingMovementAttachments.some(a => a.name === f.name && a.size === f.size);
+    if (!alreadyExists) {
+      const dataUrl = await readFileAsDataURL(f);
+      pendingMovementAttachments.push({
+        id: `att-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        name: f.name,
+        size: f.size,
+        type: f.type.includes('image') ? 'image' : 'pdf',
+        icon: f.type.includes('image') ? '📷' : '📄',
+        dataUrl: dataUrl
+      });
+    }
+  }
+
+  input.value = "";
+  renderMovementFilesPreview();
+}
+
+function removeMovementAttachment(id) {
+  pendingMovementAttachments = pendingMovementAttachments.filter(a => a.id !== id);
+  renderMovementFilesPreview();
+}
+
+function renderMovementFilesPreview() {
+  const container = document.getElementById("movFilesListPreview");
+  if (!container) return;
+  if (!pendingMovementAttachments || pendingMovementAttachments.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+  container.innerHTML = pendingMovementAttachments.map(f => {
+    const isImg = f.type === "image";
+    const icon = isImg ? "📷" : "📄";
+    const sizeKb = f.size ? `${(f.size / 1024).toFixed(1)} KB` : '';
+    return `<span class="badge" style="background: rgba(16, 185, 129, 0.15); border: 1px solid var(--accent-green); color: var(--accent-green); font-size: 0.75rem; padding: 0.25rem 0.55rem; display: inline-flex; align-items: center; gap: 0.35rem; border-radius: 4px;">
+      <span>${icon} ${f.name} ${sizeKb ? `(${sizeKb})` : ''}</span>
+      <button type="button" onclick="removeMovementAttachment('${f.id}')" title="Eliminar adjunto" style="background: none; border: none; color: #ef4444; font-weight: bold; cursor: pointer; padding: 0 0 0 4px; font-size: 0.85rem; line-height: 1;">✕</button>
+    </span>`;
+  }).join('');
+}
+
 function handleCreateMovement(e) {
   e.preventDefault();
   const type = document.getElementById("movType").value;
@@ -107582,178 +107639,145 @@ function handleCreateMovement(e) {
   const customerId = document.getElementById("movCustomer").value;
   const serialNumber = document.getElementById("movSerial")?.value;
   const notes = document.getElementById("movNotes").value;
-  const fileInput = document.getElementById("movFilesInput");
 
   const product = appState.products.find(p => p.id === prodId);
   const customer = appState.customers.find(c => c.id === customerId);
 
-  const attachments = [];
-
-  const processFiles = () => {
-    if (type === 'SALIDA_VENTA') {
-      const available = product.physicalStock - product.reservedStock;
-      if (qty > available) {
-        alert(`⚠️ ERROR DE STOCK: El producto ${product.sku} solo tiene ${available} unidades disponibles.`);
-        return;
-      }
-    }
-
-    if (type === 'INGRESO_COMPRA' && appState.currentUser.role === 'LOGISTICA') {
-      const targetLocId = "loc-1";
-      const targetLoc = appState.locations ? appState.locations.find(l => l.id === targetLocId) : null;
-      let parsedSerials = [];
-      if (product.requiresSerial && serialNumber) {
-        parsedSerials = serialNumber.split(',').map(s => s.trim()).filter(Boolean);
-      }
-
-      const newPendingIntake = {
-        id: `intake-${Date.now()}`,
-        submittedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
-        submittedBy: `${appState.currentUser.name} (Logística)`,
-        userEmail: appState.currentUser.email,
-        productId: prodId,
-        sku: product.sku,
-        productName: product.name,
-        locationId: targetLocId,
-        locationName: targetLoc ? targetLoc.name : "Bodega Principal (Central)",
-        proposedQuantity: qty,
-        requiresSerial: product.requiresSerial,
-        proposedSerials: parsedSerials,
-        invoiceNumber: invoice || `FAC-IN-${Date.now().toString().slice(-4)}`,
-        notes: notes || "Ingreso registrado por usuario Logística",
-        status: "PENDIENTE_VALIDACION"
-      };
-
-      if (!appState.pendingIntakes) appState.pendingIntakes = [];
-      appState.pendingIntakes.unshift(newPendingIntake);
-      savePendingIntakesToDisk();
-
-      addActivityLog("CREACION", "PendingInventoryIntake", `Ingreso de ${qty} unidades de '${product.sku}' enviado a cola de validación por usuario Logística.`);
-
-      alert(`⏳ INGRESO REGISTRADO EN BORRADOR: Su solicitud de ingreso de ${qty} unidades de '${product.sku}' ha quedado PENDIENTE DE VALIDACIÓN por un Administrador.\n\nNo ingresará al inventario físico ni al Kardex hasta que un Administrador la revise y la apruebe.`);
-      
-      document.getElementById("movementForm").reset();
-      renderAllViews();
-      return;
-    }
-
-    ensureProductLocations();
-    if (!product.stockByLocation) product.stockByLocation = {};
-
-    if (type === 'INGRESO_COMPRA' || type === 'ENTRADA') {
-      product.physicalStock = (product.physicalStock || 0) + qty;
-      product.stockByLocation["loc-1"] = (product.stockByLocation["loc-1"] || 0) + qty;
-    } else if (type === 'SALIDA_VENTA' || type === 'GARANTIA_REEMPLAZO' || type === 'SALIDA') {
-      product.physicalStock = Math.max(0, (product.physicalStock || 0) - qty);
-      product.stockByLocation["loc-1"] = Math.max(0, (product.stockByLocation["loc-1"] || 0) - qty);
-    } else if (type === 'AJUSTE') {
-      product.physicalStock = Math.max(0, (product.physicalStock || 0) + qty);
-      product.stockByLocation["loc-1"] = Math.max(0, (product.stockByLocation["loc-1"] || 0) + qty);
-    }
-
-    const newMov = {
-      id: `mov-${Date.now()}`,
-      date: new Date().toISOString().substring(0, 10),
-      type,
-      productId: prodId,
-      quantity: qty,
-      invoiceNumber: invoice || null,
-      customerName: customer ? customer.name : 'Venta General',
-      user: appState.currentUser.name,
-      notes,
-      attachments
-    };
-
-    appState.movements.unshift(newMov);
-
-    if (product.requiresSerial && serialNumber) {
-      let serialItem = appState.serializedItems.find(i => i.serialNumber === serialNumber);
-      if (!serialItem && (type === 'INGRESO_COMPRA' || type === 'ENTRADA')) {
-        serialItem = {
-          id: `ser-${Date.now()}`,
-          productId: prodId,
-          serialNumber: serialNumber,
-          status: "EN_STOCK",
-          currentCustomerId: null,
-          entryDate: new Date().toISOString().substring(0, 10),
-          saleDate: null,
-          invoiceNumber: invoice,
-          attachments,
-          history: []
-        };
-        appState.serializedItems.push(serialItem);
-      }
-
-      if (serialItem) {
-        if (type === 'SALIDA_VENTA') {
-          serialItem.status = "VENDIDO";
-          serialItem.currentCustomerId = customerId;
-          serialItem.saleDate = new Date().toISOString().substring(0, 10);
-          serialItem.invoiceNumber = invoice;
-          serialItem.attachments = [...(serialItem.attachments || []), ...attachments];
-        }
-        serialItem.history.push({
-          type: type === 'SALIDA_VENTA' ? 'VENTA' : type,
-          date: new Date().toISOString().substring(0, 10),
-          user: appState.currentUser.name,
-          description: `${type}: ${notes || 'Sin observaciones'} (Factura: ${invoice || 'N/A'})`,
-          attachments
-        });
-      }
-    }
-
-    saveProductsToDisk();
-    saveMovementsToDisk();
-    saveSerializedItemsToDisk();
-
-    addActivityLog("CREACION", "KardexMovement", `Registro de movimiento Kardex (${type}) para '${product.sku}'. Cant: ${qty}. Factura: ${invoice || 'N/A'}`);
-
-    alert(`✅ Movimiento registrado exitosamente con ${attachments.length} soportes adjuntos.`);
-    document.getElementById("movementForm").reset();
-    const filePrev = document.getElementById("movFilesListPreview");
-    if (filePrev) filePrev.innerHTML = "";
-    populateDropdowns();
-    renderAllViews();
-  };
-
-  if (fileInput && fileInput.files.length > 0) {
-    let filesProcessed = 0;
-    for (let f of fileInput.files) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        attachments.push({
-          name: f.name,
-          type: f.type.includes('image') ? 'image' : 'pdf',
-          icon: f.type.includes('image') ? '📷' : '📄',
-          dataUrl: event.target.result
-        });
-        filesProcessed++;
-        if (filesProcessed === fileInput.files.length) {
-          processFiles();
-        }
-      };
-      reader.readAsDataURL(f);
-    }
-  } else {
-    processFiles();
-  }
-}
-
-function renderSelectedFilesList(input) {
-  const container = document.getElementById("movFilesListPreview");
-  if (!container) return;
-  if (!input.files || input.files.length === 0) {
-    container.innerHTML = "";
+  if (!product) {
+    alert("⚠️ Por favor seleccione un producto válido.");
     return;
   }
-  const filesArray = Array.from(input.files);
-  container.innerHTML = filesArray.map(f => {
-    const isImg = f.type.includes("image");
-    const icon = isImg ? "📷" : "📄";
-    return `<span class="badge" style="background: rgba(16, 185, 129, 0.15); border: 1px solid var(--accent-green); color: var(--accent-green); font-size: 0.75rem; padding: 0.25rem 0.5rem; display: inline-flex; align-items: center; gap: 0.25rem;">
-      ${icon} ${f.name} (${(f.size / 1024).toFixed(1)} KB)
-    </span>`;
-  }).join('');
+
+  const attachments = [...pendingMovementAttachments];
+
+  if (type === 'SALIDA_VENTA') {
+    const available = product.physicalStock - product.reservedStock;
+    if (qty > available) {
+      alert(`⚠️ ERROR DE STOCK: El producto ${product.sku} solo tiene ${available} unidades disponibles.`);
+      return;
+    }
+  }
+
+  if (type === 'INGRESO_COMPRA' && appState.currentUser.role === 'LOGISTICA') {
+    const targetLocId = "loc-1";
+    const targetLoc = appState.locations ? appState.locations.find(l => l.id === targetLocId) : null;
+    let parsedSerials = [];
+    if (product.requiresSerial && serialNumber) {
+      parsedSerials = serialNumber.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    const newPendingIntake = {
+      id: `intake-${Date.now()}`,
+      submittedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      submittedBy: `${appState.currentUser.name} (Logística)`,
+      userEmail: appState.currentUser.email,
+      productId: prodId,
+      sku: product.sku,
+      productName: product.name,
+      locationId: targetLocId,
+      locationName: targetLoc ? targetLoc.name : "Bodega Principal (Central)",
+      proposedQuantity: qty,
+      requiresSerial: product.requiresSerial,
+      proposedSerials: parsedSerials,
+      invoiceNumber: invoice || `FAC-IN-${Date.now().toString().slice(-4)}`,
+      notes: notes || "Ingreso registrado por usuario Logística",
+      attachments: attachments,
+      status: "PENDIENTE_VALIDACION"
+    };
+
+    if (!appState.pendingIntakes) appState.pendingIntakes = [];
+    appState.pendingIntakes.unshift(newPendingIntake);
+    savePendingIntakesToDisk();
+
+    addActivityLog("CREACION", "PendingInventoryIntake", `Ingreso de ${qty} unidades de '${product.sku}' enviado a cola de validación por usuario Logística.`);
+
+    alert(`⏳ INGRESO REGISTRADO EN BORRADOR: Su solicitud de ingreso de ${qty} unidades de '${product.sku}' ha quedado PENDIENTE DE VALIDACIÓN por un Administrador.\n\nNo ingresará al inventario físico ni al Kardex hasta que un Administrador la revise y la apruebe.`);
+    
+    pendingMovementAttachments = [];
+    renderMovementFilesPreview();
+    document.getElementById("movementForm").reset();
+    renderAllViews();
+    return;
+  }
+
+  ensureProductLocations();
+  if (!product.stockByLocation) product.stockByLocation = {};
+
+  if (type === 'INGRESO_COMPRA' || type === 'ENTRADA') {
+    product.physicalStock = (product.physicalStock || 0) + qty;
+    product.stockByLocation["loc-1"] = (product.stockByLocation["loc-1"] || 0) + qty;
+  } else if (type === 'SALIDA_VENTA' || type === 'GARANTIA_REEMPLAZO' || type === 'SALIDA') {
+    product.physicalStock = Math.max(0, (product.physicalStock || 0) - qty);
+    product.stockByLocation["loc-1"] = Math.max(0, (product.stockByLocation["loc-1"] || 0) - qty);
+  } else if (type === 'AJUSTE') {
+    product.physicalStock = Math.max(0, (product.physicalStock || 0) + qty);
+    product.stockByLocation["loc-1"] = Math.max(0, (product.stockByLocation["loc-1"] || 0) + qty);
+  }
+
+  const newMov = {
+    id: `mov-${Date.now()}`,
+    date: new Date().toISOString().substring(0, 10),
+    type,
+    productId: prodId,
+    quantity: qty,
+    invoiceNumber: invoice || null,
+    customerName: customer ? customer.name : 'Venta General',
+    user: appState.currentUser.name,
+    notes,
+    attachments
+  };
+
+  appState.movements.unshift(newMov);
+
+  if (product.requiresSerial && serialNumber) {
+    let serialItem = appState.serializedItems.find(i => i.serialNumber === serialNumber);
+    if (!serialItem && (type === 'INGRESO_COMPRA' || type === 'ENTRADA')) {
+      serialItem = {
+        id: `ser-${Date.now()}`,
+        productId: prodId,
+        serialNumber: serialNumber,
+        status: "EN_STOCK",
+        currentCustomerId: null,
+        entryDate: new Date().toISOString().substring(0, 10),
+        saleDate: null,
+        invoiceNumber: invoice,
+        attachments,
+        history: []
+      };
+      appState.serializedItems.push(serialItem);
+    }
+
+    if (serialItem) {
+      if (type === 'SALIDA_VENTA') {
+        serialItem.status = "VENDIDO";
+        serialItem.currentCustomerId = customerId;
+        serialItem.saleDate = new Date().toISOString().substring(0, 10);
+        serialItem.invoiceNumber = invoice;
+        serialItem.attachments = [...(serialItem.attachments || []), ...attachments];
+      }
+      serialItem.history.push({
+        type: type === 'SALIDA_VENTA' ? 'VENTA' : type,
+        date: new Date().toISOString().substring(0, 10),
+        user: appState.currentUser.name,
+        description: `${type}: ${notes || 'Sin observaciones'} (Factura: ${invoice || 'N/A'})`,
+        attachments
+      });
+    }
+  }
+
+  saveProductsToDisk();
+  saveMovementsToDisk();
+  saveSerializedItemsToDisk();
+
+  addActivityLog("CREACION", "KardexMovement", `Registro de movimiento Kardex (${type}) para '${product.sku}'. Cant: ${qty}. Factura: ${invoice || 'N/A'}`);
+
+  alert(`✅ Movimiento registrado exitosamente con ${attachments.length} soportes adjuntos.`);
+  
+  pendingMovementAttachments = [];
+  renderMovementFilesPreview();
+  document.getElementById("movementForm").reset();
+  populateDropdowns();
+  renderAllViews();
 }
 
 function renderKardex() {
