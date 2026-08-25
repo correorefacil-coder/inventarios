@@ -104864,6 +104864,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   populateDropdowns();
   populateAmazonSidebarFilters();
   initMovementProductAutocomplete();
+  initTransferProductAutocomplete();
   initCustomerAutocomplete();
   initInactivityListeners();
   initSidebarState();
@@ -106417,6 +106418,124 @@ function handleSaveLocation(e) {
   renderAllViews();
 }
 
+function initTransferProductAutocomplete() {
+  const searchInput = document.getElementById("transferProductSearchInput");
+  const dropdown = document.getElementById("transferProductSuggestions");
+  if (!searchInput || !dropdown) return;
+
+  searchInput.addEventListener("input", () => renderTransferProductSuggestions());
+  searchInput.addEventListener("focus", () => renderTransferProductSuggestions());
+
+  document.addEventListener("click", (e) => {
+    if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.style.display = "none";
+    }
+  });
+}
+
+function renderTransferProductSuggestions() {
+  const searchInput = document.getElementById("transferProductSearchInput");
+  const dropdown = document.getElementById("transferProductSuggestions");
+  const fromLocId = document.getElementById("transferFromLoc")?.value;
+  if (!searchInput || !dropdown) return;
+
+  const query = searchInput.value.toLowerCase().trim();
+  let matches = appState.products.filter(p => {
+    if (!query) return true;
+    const { brand, supplier } = getProductBrandAndSupplier(p);
+    const sku = (p.sku || "").toLowerCase();
+    const name = (p.name || "").toLowerCase();
+    const br = brand.toLowerCase();
+    const sup = supplier.toLowerCase();
+    return sku.includes(query) || name.includes(query) || br.includes(query) || sup.includes(query);
+  });
+
+  matches = matches.slice(0, 15);
+
+  if (matches.length === 0) {
+    dropdown.innerHTML = `
+      <div style="padding: 0.75rem; text-align: center; color: var(--text-muted); font-size: 0.82rem;">
+        No se encontraron productos coincidentes.
+      </div>
+    `;
+  } else {
+    dropdown.innerHTML = matches.map(p => {
+      const { brand } = getProductBrandAndSupplier(p);
+      const stockInOrigin = (p.stockByLocation && fromLocId && p.stockByLocation[fromLocId]) ? p.stockByLocation[fromLocId] : (p.stockByLocation ? (p.stockByLocation["loc-1"] || 0) : 0);
+      return `
+        <div class="autocomplete-suggestion-item" onclick="selectTransferProduct('${p.id}')">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.15rem;">
+            <strong style="color: var(--accent-green); font-family: monospace; font-size: 0.85rem;">${p.sku}</strong>
+            <span class="badge ${p.physicalStock > 0 ? 'badge-green' : 'badge-red'}" style="font-size: 0.7rem;">Stock Total: ${p.physicalStock}</span>
+          </div>
+          <div style="font-weight: 600; font-size: 0.88rem; color: var(--text-main);">${p.name}</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem;">
+            🏷️ Marca: <strong>${brand}</strong> | 📍 Stock en Sede Origen: <strong style="color: var(--accent-teal);">${stockInOrigin} ${p.unitOfMeasure}</strong>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  dropdown.style.display = "block";
+}
+
+function selectTransferProduct(prodId) {
+  const hiddenInput = document.getElementById("transferProduct");
+  const searchInput = document.getElementById("transferProductSearchInput");
+  const selectedCard = document.getElementById("transferProductSelectedCard");
+  const suggestions = document.getElementById("transferProductSuggestions");
+  const fromLocId = document.getElementById("transferFromLoc")?.value;
+
+  if (!hiddenInput) return;
+
+  const product = appState.products.find(p => p.id === prodId);
+  if (product) {
+    hiddenInput.value = product.id;
+    const { brand } = getProductBrandAndSupplier(product);
+    const stockInOrigin = (product.stockByLocation && fromLocId && product.stockByLocation[fromLocId]) ? product.stockByLocation[fromLocId] : (product.stockByLocation ? (product.stockByLocation["loc-1"] || 0) : 0);
+
+    selectedCard.innerHTML = `
+      <div class="selected-product-info">
+        <div class="selected-product-title">📦 ${product.sku} - ${product.name}</div>
+        <div class="selected-product-sub">
+          🏷️ Marca: <strong>${brand}</strong> | 📦 Stock Total: <strong>${product.physicalStock} ${product.unitOfMeasure}</strong> | 📍 Stock en Origen: <strong style="color: var(--accent-green);">${stockInOrigin} ${product.unitOfMeasure}</strong>
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; color: var(--accent-red); border-color: rgba(239,68,68,0.4);" onclick="clearTransferProduct()">
+        ✖ Cambiar
+      </button>
+    `;
+    selectedCard.style.display = "flex";
+    if (searchInput) {
+      searchInput.style.display = "none";
+      searchInput.value = "";
+    }
+    if (suggestions) suggestions.style.display = "none";
+
+    handleTransferProductSelect();
+  }
+}
+
+function clearTransferProduct() {
+  const hiddenInput = document.getElementById("transferProduct");
+  const searchInput = document.getElementById("transferProductSearchInput");
+  const selectedCard = document.getElementById("transferProductSelectedCard");
+  const suggestions = document.getElementById("transferProductSuggestions");
+  const availableHelp = document.getElementById("transferStockAvailableHelp");
+  const serialGroup = document.getElementById("transferSerialGroup");
+
+  if (hiddenInput) hiddenInput.value = "";
+  if (selectedCard) selectedCard.style.display = "none";
+  if (searchInput) {
+    searchInput.style.display = "block";
+    searchInput.focus();
+  }
+  if (suggestions) suggestions.style.display = "none";
+  if (availableHelp) availableHelp.textContent = "";
+  if (serialGroup) serialGroup.style.display = "none";
+}
+
 function handleTransferProductSelect() {
   const prodId = document.getElementById("transferProduct")?.value;
   const fromLocId = document.getElementById("transferFromLoc")?.value;
@@ -106537,7 +106656,7 @@ function handleTransferStock(e) {
 
   alert(`✅ TRASLADO EXITOSO: ${qty} unidades de ${product.sku} trasladadas a '${toLoc.name}'.`);
   document.getElementById("transferStockForm").reset();
-  handleTransferProductSelect();
+  clearTransferProduct();
   populateDropdowns();
   renderAllViews();
 }

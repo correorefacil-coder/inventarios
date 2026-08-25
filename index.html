@@ -796,7 +796,7 @@
           <div class="panel">
             <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Historial Completo con Soportes Adjuntos</h3>
             <div class="table-responsive">
-              <table class="custom-table">
+              <table class="custom-table kardex-table">
                 <thead>
                   <tr>
                     <th>Fecha</th>
@@ -1249,11 +1249,14 @@
 
             <form id="transferStockForm" onsubmit="handleTransferStock(event)">
               <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Producto a Trasladar *</label>
-                  <select id="transferProduct" class="form-control" required onchange="handleTransferProductSelect()">
-                    <!-- JS -->
-                  </select>
+                <div class="form-group" style="position: relative;">
+                  <label class="form-label" for="transferProductSearchInput">Producto a Trasladar * (Autocompletar)</label>
+                  <div class="product-autocomplete-container">
+                    <input type="text" id="transferProductSearchInput" class="form-control" placeholder="🔍 Buscar por SKU, Nombre o Marca..." autocomplete="off">
+                    <input type="hidden" id="transferProduct" required>
+                    <div id="transferProductSelectedCard" class="selected-product-card" style="display: none;"></div>
+                    <div id="transferProductSuggestions" class="autocomplete-dropdown-list" style="display: none;"></div>
+                  </div>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Ubicación de Origen *</label>

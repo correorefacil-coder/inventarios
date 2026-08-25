@@ -914,35 +914,31 @@ body {
   font-size: 0.88rem;
 }
 
-.custom-table th:first-child,
-.custom-table td:first-child {
-  width: 95px;
-  max-width: 105px;
-  white-space: nowrap;
-  padding-left: 0.75rem;
-  padding-right: 0.5rem;
-}
-
-.custom-table th:nth-child(2),
-.custom-table td:nth-child(2) {
-  min-width: 200px;
-  max-width: 320px;
-}
-
-.custom-table th:nth-child(3),
-.custom-table td:nth-child(3) {
-  width: 110px;
-}
-
-.custom-table th:nth-child(4),
-.custom-table td:nth-child(4) {
-  width: 90px;
+/* Anchos específicos solo para la tabla Kardex */
+.kardex-table th:first-child,
+.kardex-table td:first-child {
+  width: 105px;
   white-space: nowrap;
 }
 
-.custom-table th:nth-child(5),
-.custom-table td:nth-child(5) {
-  min-width: 160px;
+.kardex-table th:nth-child(2),
+.kardex-table td:nth-child(2) {
+  min-width: 140px;
+}
+
+.kardex-table th:nth-child(3),
+.kardex-table td:nth-child(3) {
+  min-width: 220px;
+}
+
+.kardex-table th:nth-child(4),
+.kardex-table td:nth-child(4) {
+  width: 80px;
+  text-align: center;
+}
+
+.kardex-table td:nth-child(4) {
+  text-align: center;
 }
 
 .custom-table th {
