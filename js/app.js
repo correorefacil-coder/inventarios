@@ -108584,45 +108584,63 @@ function handleCreateMovement(e) {
 
 function renderKardex() {
   const tableBody = document.getElementById("kardexTableBody");
+  if (!tableBody) return;
+
+  if (!appState.movements || appState.movements.length === 0) {
+    tableBody.innerHTML = `
+      <tr>
+        <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+          📭 No hay movimientos registrados en el Kardex aún.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
   tableBody.innerHTML = appState.movements.map(m => {
-    const prod = appState.products.find(p => p.id === m.productId);
+    const prod = appState.products ? appState.products.find(p => p.id === m.productId) : null;
     const locObj = appState.locations ? appState.locations.find(l => l.id === m.locationId) : null;
     const locName = locObj ? locObj.name : (m.locationId || 'Central');
+    const atts = Array.isArray(m.attachments) ? m.attachments : [];
+    const dateStr = (m.date || '').replace('T', ' ').substring(0, 16);
+
     return `
       <tr>
-        <td><strong>${m.date}</strong></td>
+        <td><strong>${dateStr || '-'}</strong></td>
         <td>
           <span class="badge ${
-            m.type === 'INGRESO_COMPRA' ? 'badge-green' :
-            m.type === 'SALIDA_VENTA' ? 'badge-blue' :
+            m.type === 'INGRESO_COMPRA' || m.type === 'ENTRADA' ? 'badge-green' :
+            m.type === 'SALIDA_VENTA' || m.type === 'SALIDA' ? 'badge-blue' :
             m.type === 'AJUSTE_AGREGAR' ? 'badge-purple' :
             m.type === 'AJUSTE_QUITAR' ? 'badge-red' :
             'badge-amber'
           }">
             ${
+              m.type === 'INGRESO_COMPRA' || m.type === 'ENTRADA' ? '📥 INGRESO' :
+              m.type === 'SALIDA_VENTA' || m.type === 'SALIDA' ? '📤 SALIDA' :
               m.type === 'AJUSTE_AGREGAR' ? '➕ AJUSTE (+)' :
               m.type === 'AJUSTE_QUITAR' ? '➖ AJUSTE (-)' :
               m.type
             }
           </span>
         </td>
-        <td><strong>${prod ? prod.sku : ''}</strong> - ${prod ? prod.name : ''}</td>
+        <td><strong>${prod ? prod.sku : (m.productId || '')}</strong> ${prod ? ` - ${prod.name}` : ''}</td>
         <td><span class="badge badge-purple" style="font-size: 0.75rem;">📍 ${locName}</span></td>
-        <td><strong>${m.quantity}</strong></td>
+        <td><strong style="color: var(--accent-green); font-size: 0.9rem;">${m.quantity}</strong></td>
         <td>${m.invoiceNumber || '-'}</td>
         <td>${m.customerName || '-'}</td>
-        <td>${m.user}</td>
+        <td>${m.user || '-'}</td>
         <td>
           <div>${m.notes || '-'}</div>
           ${atts.length > 0 ? `
             <div style="margin-top: 0.3rem; display: flex; gap: 0.3rem; flex-wrap: wrap;">
               ${atts.map(a => `
-                <button class="btn btn-secondary" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;" onclick="previewAttachment('${a.name}', '${a.type}', ${a.dataUrl ? `'${a.dataUrl}'` : 'null'})">
+                <button type="button" class="btn btn-secondary" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;" onclick="previewAttachment('${a.name}', '${a.type}', ${a.dataUrl ? `'${a.dataUrl}'` : 'null'})">
                   ${a.icon || '📎'} ${a.name}
                 </button>
               `).join('')}
             </div>
-          ` : '-'}
+          ` : ''}
         </td>
       </tr>
     `;
