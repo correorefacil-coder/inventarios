@@ -104849,6 +104849,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   loadPersistedPendingIntakes();
   loadProductsFromDisk();
   loadCustomersFromDisk();
+  loadLocationsFromDisk();
+  loadCategoriesFromDisk();
   loadMovementsFromDisk();
   loadReservationsFromDisk();
   loadSerializedItemsFromDisk();
@@ -104866,6 +104868,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initMovementProductAutocomplete();
   initTransferProductAutocomplete();
   initCustomerAutocomplete();
+  initLifecycleAutocomplete();
   initInactivityListeners();
   initSidebarState();
   checkAuthentication();
@@ -104876,6 +104879,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     const input = document.getElementById("warrantySerialInput");
     if (suggBox && !suggBox.contains(e.target) && e.target !== input) {
       suggBox.classList.remove("active");
+    }
+
+    const lfProdBox = document.getElementById("lifecycleProductSuggestions");
+    const lfProdInput = document.getElementById("lifecycleProductSearchInput");
+    if (lfProdBox && !lfProdBox.contains(e.target) && e.target !== lfProdInput) {
+      lfProdBox.style.display = "none";
+    }
+
+    const lfSerialBox = document.getElementById("lifecycleSerialSuggestions");
+    const lfSerialInput = document.getElementById("lifecycleSerialSearchInput");
+    if (lfSerialBox && !lfSerialBox.contains(e.target) && e.target !== lfSerialInput) {
+      lfSerialBox.style.display = "none";
     }
   });
 
@@ -105257,6 +105272,26 @@ function populateDropdowns() {
         const fullName = `${u.firstName || ''} ${u.lastName || u.name || ''}`.trim();
         return `<option value="${fullName}">${fullName} (${u.email})</option>`;
       }).join('');
+  }
+
+  const resFilterUser = document.getElementById("resFilterUser");
+  if (resFilterUser) {
+    const curVal = resFilterUser.value;
+    const isSuperuserActive = (appState.currentUser && appState.currentUser.email === 'gerencia@softproductiva.com');
+    const availableUsersForFilter = (appState.users || []).filter(u => {
+      if (u.email === 'gerencia@softproductiva.com' || u.isSuperuser) {
+        return isSuperuserActive;
+      }
+      return true;
+    });
+
+    resFilterUser.innerHTML = `<option value="ALL">Todos los Usuarios</option>` +
+      availableUsersForFilter.map(u => {
+        const fullName = `${u.firstName || ''} ${u.lastName || u.name || ''}`.trim() || u.email;
+        const uid = u.id || u.email;
+        return `<option value="${uid}">${fullName}</option>`;
+      }).join('');
+    if (curVal) resFilterUser.value = curVal;
   }
 
   const catalogLocationFilter = document.getElementById("catalogLocationFilter");
@@ -106441,6 +106476,8 @@ function handleSaveLocation(e) {
     alert(`✅ Ubicación '${name}' creada exitosamente.`);
   }
 
+  saveLocationsToDisk();
+  saveProductsToDisk();
   closeLocationModal();
   ensureProductLocations();
   populateDropdowns();
@@ -107984,10 +108021,14 @@ function renderCatalog() {
     const locationBreakdownHtml = appState.locations.map(loc => {
       const qty = (p.stockByLocation && p.stockByLocation[loc.id]) ? p.stockByLocation[loc.id] : 0;
       const shortLocName = loc.name.replace("Bodega Principal (Central)", "Central").replace("Punto de Venta Bogotá", "PV Bogotá").replace("Almacén Central Llanos", "Llanos");
+      const locQtyColor = qty > 0 ? 'var(--accent-green, #10b981)' : 'var(--accent-red, #ef4444)';
       return `<span style="font-size: 0.7rem; padding: 0.1rem 0.35rem; background: rgba(15,23,42,0.6); border: 1px solid var(--border-color); border-radius: 4px; display: inline-flex; align-items: center; gap: 0.2rem; white-space: nowrap;">
-        📍 ${shortLocName}: <strong style="color: ${qty > 0 ? 'var(--accent-teal)' : 'var(--text-muted)'};">${qty}</strong>
+        📍 ${shortLocName}: <strong style="color: ${locQtyColor}; font-weight: 700;">${qty}</strong>
       </span>`;
     }).join(' ');
+
+    const hasStock = availableStock > 0;
+    const badgeClass = hasStock ? 'badge-green' : 'badge-red';
 
     return `
       <tr>
@@ -107999,8 +108040,8 @@ function renderCatalog() {
         </td>
         <td>
           <div style="font-size: 0.83rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
-            <span>📦 Total: <strong>${p.physicalStock}</strong> ${p.unitOfMeasure}</span>
-            <span class="badge ${availableStock <= p.minStockAlert ? 'badge-red' : 'badge-green'}" style="font-size: 0.72rem; padding: 0.1rem 0.4rem;" title="Disponible: ${availableStock} | Bloqueado: ${p.reservedStock}">
+            <span>📦 Total: <strong style="color: ${p.physicalStock > 0 ? 'var(--accent-green, #10b981)' : 'var(--accent-red, #ef4444)'};">${p.physicalStock}</strong> ${p.unitOfMeasure}</span>
+            <span class="badge ${badgeClass}" style="font-size: 0.72rem; padding: 0.1rem 0.4rem;" title="Disponible: ${availableStock} | Bloqueado: ${p.reservedStock}">
               ${availableStock} Disp / ${p.reservedStock} Bloq
             </span>
           </div>
@@ -108317,22 +108358,43 @@ function closeCategoryModal() {
 
 function handleCreateCategory(e) {
   e.preventDefault();
-  const name = document.getElementById("newCatName").value;
-  const desc = document.getElementById("newCatDesc").value;
+  const nameInput = document.getElementById("newCatName");
+  const descInput = document.getElementById("newCatDesc");
+  const name = (nameInput ? nameInput.value : "").trim();
+  const desc = (descInput ? descInput.value : "").trim();
+
+  if (!name) {
+    alert("⚠️ Por favor ingrese el nombre de la categoría.");
+    return;
+  }
+
+  if (!appState.categories) appState.categories = [];
+
+  // Validar que no exista ya una categoría con el mismo nombre (insensible a mayúsculas/minúsculas y espacios)
+  const normalizedNewName = name.toLowerCase();
+  const existingCat = appState.categories.find(c => (c.name || "").trim().toLowerCase() === normalizedNewName);
+  if (existingCat) {
+    alert(`❌ No se puede crear la categoría: Ya existe una categoría registrada con el nombre '${existingCat.name}'. Por favor elija un nombre diferente.`);
+    return;
+  }
 
   const newCat = {
     id: `cat-${Date.now()}`,
     name,
-    description: desc || "Categoría creada dinámicamente"
+    description: desc || "Categoría creada dinámicamente",
+    createdAt: new Date().toISOString().substring(0, 10)
   };
 
   appState.categories.push(newCat);
+  saveCategoriesToDisk();
   addActivityLog("CREACION", "CategoryManagement", `Creación de nueva categoría de productos '${name}'`);
 
-  alert(`✅ Categoría '${name}' creada exitosamente.`);
   closeCategoryModal();
+  document.getElementById("newCategoryForm")?.reset();
   populateDropdowns();
   renderAllViews();
+
+  alert(`✅ Categoría '${name}' creada y guardada exitosamente.`);
 }
 
 function toggleInvoiceRequirement() {
@@ -108654,46 +108716,481 @@ function renderKardex() {
   }).join('');
 }
 
-function renderEquipmentLifeCycle() {
-  const serialId = document.getElementById("equipmentSerialSelect")?.value;
+// ============================================================================
+// SISTEMA DE HOJA DE VIDA, GARANTÍAS Y TRAZABILIDAD 360°
+// ============================================================================
+
+let currentLifecycleState = {
+  productId: null,
+  serialId: null,
+  customIdentifier: null,
+  isSerialized: false
+};
+
+let eventModalSelectedFiles = [];
+
+function initLifecycleAutocomplete() {
+  const prodInput = document.getElementById("lifecycleProductSearchInput");
+  const serialInput = document.getElementById("lifecycleSerialSearchInput");
+
+  if (prodInput) {
+    prodInput.addEventListener("focus", () => renderLifecycleProductSuggestions());
+    prodInput.addEventListener("input", () => renderLifecycleProductSuggestions());
+  }
+
+  if (serialInput) {
+    serialInput.addEventListener("focus", () => renderLifecycleSerialSuggestions());
+    serialInput.addEventListener("input", () => renderLifecycleSerialSuggestions());
+  }
+}
+
+function renderLifecycleProductSuggestions() {
+  const input = document.getElementById("lifecycleProductSearchInput");
+  const suggestionsBox = document.getElementById("lifecycleProductSuggestions");
+  if (!input || !suggestionsBox) return;
+
+  const q = (input.value || "").toLowerCase().trim();
+  const prods = (appState.products || []).filter(p => {
+    if (!q) return true;
+    const sku = (p.sku || "").toLowerCase();
+    const name = (p.name || "").toLowerCase();
+    const barcode = (p.barcode || "").toLowerCase();
+    const cat = (p.category || "").toLowerCase();
+    return sku.includes(q) || name.includes(q) || barcode.includes(q) || cat.includes(q);
+  }).slice(0, 15);
+
+  if (prods.length === 0) {
+    suggestionsBox.innerHTML = `<div style="padding: 0.75rem; color: var(--text-muted); font-size: 0.82rem; text-align: center;">No se encontraron productos coincidentes</div>`;
+  } else {
+    suggestionsBox.innerHTML = prods.map(p => {
+      const isReqSerial = (p.requiresSerial === true || p.requiresSerial === 'true');
+      const serialTag = isReqSerial 
+        ? `<span class="badge badge-green" style="font-size: 0.7rem;">🏷️ Con Seriales</span>`
+        : `<span class="badge badge-purple" style="font-size: 0.7rem;">📦 Cantidad General</span>`;
+      return `
+        <div class="suggestion-item" onclick="selectLifecycleProduct('${p.id}')" style="padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border-color); cursor: pointer;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.4rem;">
+            <strong style="color: var(--accent-green); font-size: 0.85rem;">[${p.sku}] ${p.name}</strong>
+            ${serialTag}
+          </div>
+          <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem;">
+            Categoría: ${p.category || 'General'} | Stock Total: ${p.physicalStock || 0} ${p.unitOfMeasure || 'UN'}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+  suggestionsBox.style.display = "block";
+}
+
+function selectLifecycleProduct(productId) {
+  const prod = (appState.products || []).find(p => p.id === productId);
+  if (!prod) return;
+
+  currentLifecycleState.productId = prod.id;
+  currentLifecycleState.isSerialized = (prod.requiresSerial === true || prod.requiresSerial === 'true');
+  currentLifecycleState.serialId = null;
+  currentLifecycleState.customIdentifier = null;
+
+  // UI inputs
+  const hiddenId = document.getElementById("lifecycleSelectedProductId");
+  const searchInput = document.getElementById("lifecycleProductSearchInput");
+  const selectedCard = document.getElementById("lifecycleProductSelectedCard");
+  const suggestionsBox = document.getElementById("lifecycleProductSuggestions");
+  const badge = document.getElementById("lifecycleProductBadge");
+
+  if (hiddenId) hiddenId.value = prod.id;
+  if (searchInput) searchInput.style.display = "none";
+  if (suggestionsBox) suggestionsBox.style.display = "none";
+
+  if (badge) {
+    badge.style.display = "inline-block";
+    badge.textContent = currentLifecycleState.isSerialized ? "🏷️ Seriales Individuales" : "📦 Producto No Serializado";
+  }
+
+  if (selectedCard) {
+    selectedCard.innerHTML = `
+      <div class="selected-product-info">
+        <div class="selected-product-title">📦 [${prod.sku}] ${prod.name}</div>
+        <div class="selected-product-sub">
+          Categoría: <strong>${prod.category || 'General'}</strong> | Tipo: <strong>${currentLifecycleState.isSerialized ? 'Control por Número de Serie' : 'Control por Identificador de Lote'}</strong> | Stock: <strong>${prod.physicalStock || 0} ${prod.unitOfMeasure || 'UN'}</strong>
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; color: var(--accent-red); border-color: rgba(239,68,68,0.4);" onclick="clearLifecycleProduct()">
+        ✖ Cambiar Producto
+      </button>
+    `;
+    selectedCard.style.display = "flex";
+  }
+
+  // Show Step 2 Panel
+  const serialSection = document.getElementById("lifecycleSerialSection");
+  const modeA = document.getElementById("lifecycleSerialModeA");
+  const modeB = document.getElementById("lifecycleSerialModeB");
   const detailCard = document.getElementById("equipmentDetailCard");
 
-  if (!serialId) {
-    if (detailCard) detailCard.style.display = "none";
+  if (detailCard) detailCard.style.display = "none";
+
+  if (serialSection) serialSection.style.display = "block";
+  if (currentLifecycleState.isSerialized) {
+    if (modeA) modeA.style.display = "block";
+    if (modeB) modeB.style.display = "none";
+    clearLifecycleSerial();
+    renderLifecycleSerialSuggestions();
+  } else {
+    if (modeA) modeA.style.display = "none";
+    if (modeB) modeB.style.display = "block";
+    const customInput = document.getElementById("lifecycleCustomIdentifierInput");
+    if (customInput) customInput.value = "";
+  }
+}
+
+function clearLifecycleProduct() {
+  currentLifecycleState = {
+    productId: null,
+    serialId: null,
+    customIdentifier: null,
+    isSerialized: false
+  };
+
+  const hiddenId = document.getElementById("lifecycleSelectedProductId");
+  const searchInput = document.getElementById("lifecycleProductSearchInput");
+  const selectedCard = document.getElementById("lifecycleProductSelectedCard");
+  const suggestionsBox = document.getElementById("lifecycleProductSuggestions");
+  const badge = document.getElementById("lifecycleProductBadge");
+  const serialSection = document.getElementById("lifecycleSerialSection");
+  const detailCard = document.getElementById("equipmentDetailCard");
+
+  if (hiddenId) hiddenId.value = "";
+  if (selectedCard) selectedCard.style.display = "none";
+  if (badge) badge.style.display = "none";
+  if (serialSection) serialSection.style.display = "none";
+  if (detailCard) detailCard.style.display = "none";
+
+  if (searchInput) {
+    searchInput.style.display = "block";
+    searchInput.value = "";
+    searchInput.focus();
+  }
+  if (suggestionsBox) suggestionsBox.style.display = "none";
+}
+
+function renderLifecycleSerialSuggestions() {
+  const input = document.getElementById("lifecycleSerialSearchInput");
+  const suggestionsBox = document.getElementById("lifecycleSerialSuggestions");
+  if (!input || !suggestionsBox || !currentLifecycleState.productId) return;
+
+  ensureGlobalSerials();
+
+  const q = (input.value || "").toLowerCase().trim();
+  // Filter serials that belong to this product (vendidos o en stock)
+  const serials = (appState.serializedItems || []).filter(item => {
+    if (item.productId !== currentLifecycleState.productId) return false;
+    if (!q) return true;
+    const sn = (item.serialNumber || "").toLowerCase();
+    const cust = (item.customerName || item.customerId || "").toLowerCase();
+    const inv = (item.invoiceNumber || "").toLowerCase();
+    return sn.includes(q) || cust.includes(q) || inv.includes(q);
+  });
+
+  if (serials.length === 0) {
+    suggestionsBox.innerHTML = `
+      <div style="padding: 0.75rem; color: var(--text-muted); font-size: 0.82rem; text-align: center;">
+        No se encontraron seriales registrados para este producto ${q ? `con '${q}'` : ''}.
+      </div>
+    `;
+  } else {
+    suggestionsBox.innerHTML = serials.map(s => {
+      const custObj = (appState.customers || []).find(c => c.id === s.currentCustomerId || c.id === s.customerId);
+      const custName = custObj ? custObj.name : (s.customerName || 'En Bodega / Sin Vender');
+      const isSold = (s.status === 'VENDIDO' || s.currentCustomerId || s.invoiceNumber);
+      const statusBadge = isSold
+        ? `<span class="badge badge-amber" style="font-size: 0.7rem;">🛒 VENDIDO</span>`
+        : `<span class="badge badge-green" style="font-size: 0.7rem;">📦 EN STOCK</span>`;
+
+      return `
+        <div class="suggestion-item" onclick="selectLifecycleSerial('${s.id}')" style="padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border-color); cursor: pointer;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.4rem;">
+            <strong style="color: var(--accent-green); font-family: monospace; font-size: 0.9rem;">${s.serialNumber}</strong>
+            ${statusBadge}
+          </div>
+          <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; display: flex; justify-content: space-between;">
+            <span>👤 ${custName}</span>
+            <span>📅 ${s.saleDate || s.entryDate || '-'} | 🧾 Factura: ${s.invoiceNumber || 'N/A'}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+  suggestionsBox.style.display = "block";
+}
+
+function selectLifecycleSerial(serialId) {
+  ensureGlobalSerials();
+  const serialObj = (appState.serializedItems || []).find(s => s.id === serialId || s.serialNumber === serialId);
+  if (!serialObj) return;
+
+  currentLifecycleState.serialId = serialObj.id;
+  currentLifecycleState.customIdentifier = null;
+
+  const hiddenId = document.getElementById("lifecycleSelectedSerialId");
+  const searchInput = document.getElementById("lifecycleSerialSearchInput");
+  const selectedCard = document.getElementById("lifecycleSerialSelectedCard");
+  const suggestionsBox = document.getElementById("lifecycleSerialSuggestions");
+
+  if (hiddenId) hiddenId.value = serialObj.id;
+  if (searchInput) searchInput.style.display = "none";
+  if (suggestionsBox) suggestionsBox.style.display = "none";
+
+  const custObj = (appState.customers || []).find(c => c.id === serialObj.currentCustomerId || c.id === serialObj.customerId);
+  const custName = custObj ? custObj.name : (serialObj.customerName || 'En Bodega');
+
+  if (selectedCard) {
+    selectedCard.innerHTML = `
+      <div class="selected-product-info">
+        <div class="selected-product-title" style="font-family: monospace; color: var(--accent-green);">🔢 Serial: ${serialObj.serialNumber}</div>
+        <div class="selected-product-sub">
+          Estado: <strong>${serialObj.status}</strong> | Cliente: <strong>${custName}</strong> | Factura: <strong>${serialObj.invoiceNumber || 'N/A'}</strong>
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; color: var(--accent-red); border-color: rgba(239,68,68,0.4);" onclick="clearLifecycleSerial()">
+        ✖ Cambiar Serial
+      </button>
+    `;
+    selectedCard.style.display = "flex";
+  }
+
+  renderEquipmentLifeCycle();
+}
+
+function clearLifecycleSerial() {
+  currentLifecycleState.serialId = null;
+  const hiddenId = document.getElementById("lifecycleSelectedSerialId");
+  const searchInput = document.getElementById("lifecycleSerialSearchInput");
+  const selectedCard = document.getElementById("lifecycleSerialSelectedCard");
+  const suggestionsBox = document.getElementById("lifecycleSerialSuggestions");
+  const detailCard = document.getElementById("equipmentDetailCard");
+
+  if (hiddenId) hiddenId.value = "";
+  if (selectedCard) selectedCard.style.display = "none";
+  if (detailCard) detailCard.style.display = "none";
+
+  if (searchInput) {
+    searchInput.style.display = "block";
+    searchInput.value = "";
+    searchInput.focus();
+  }
+  if (suggestionsBox) suggestionsBox.style.display = "none";
+}
+
+function handleLifecycleCustomIdentifierChange() {
+  const val = (document.getElementById("lifecycleCustomIdentifierInput")?.value || "").trim();
+  if (val.length > 0) {
+    currentLifecycleState.customIdentifier = val;
+    renderEquipmentLifeCycle();
+  }
+}
+
+function lookupLifecycleByIdentifier() {
+  const val = (document.getElementById("lifecycleCustomIdentifierInput")?.value || "").trim();
+  if (!val) {
+    alert("⚠️ Por favor digite un identificador de producto (Lote, Factura o Código de Referencia).");
+    return;
+  }
+  currentLifecycleState.customIdentifier = val;
+  renderEquipmentLifeCycle();
+}
+
+function openCameraForLifecycleSerial() {
+  openCameraModal();
+}
+
+function populateLifecycleUserFilter() {
+  const userSelect = document.getElementById("lfFilterUser");
+  if (!userSelect) return;
+
+  const currentVal = userSelect.value;
+  const users = appState.users || [];
+  userSelect.innerHTML = `<option value="ALL">Todos los Usuarios</option>` + users.map(u => {
+    const fullName = `${u.firstName || ''} ${u.lastName || u.name || ''}`.trim() || u.email;
+    return `<option value="${fullName}">${fullName}</option>`;
+  }).join('');
+
+  if (currentVal) userSelect.value = currentVal;
+}
+
+function renderEquipmentLifeCycle() {
+  const detailCard = document.getElementById("equipmentDetailCard");
+  if (!detailCard) return;
+
+  const product = (appState.products || []).find(p => p.id === currentLifecycleState.productId);
+  if (!product) {
+    detailCard.style.display = "none";
     return;
   }
 
-  const item = appState.serializedItems.find(i => i.id === serialId);
-  if (!item) return;
+  ensureGlobalSerials();
+  populateLifecycleUserFilter();
 
-  const product = appState.products.find(p => p.id === item.productId);
-  const customer = appState.customers.find(c => c.id === item.currentCustomerId);
+  if (currentLifecycleState.isSerialized) {
+    const serialObj = (appState.serializedItems || []).find(s => s.id === currentLifecycleState.serialId);
+    if (!serialObj) {
+      detailCard.style.display = "none";
+      return;
+    }
 
-  document.getElementById("eqName").textContent = product ? product.name : "Equipo Serializado";
-  document.getElementById("eqSku").textContent = product ? product.sku : "SKU";
-  document.getElementById("eqSerial").textContent = item.serialNumber;
-  document.getElementById("eqStatusBadge").textContent = item.status;
-  document.getElementById("eqEntryDate").textContent = item.entryDate;
-  document.getElementById("eqCustomer").textContent = customer ? customer.name : "Sin Cliente / En Bodega";
-  document.getElementById("eqMaintenanceCount").textContent = item.history.filter(h => h.type.includes("MANTENIMIENTO")).length;
+    const custObj = (appState.customers || []).find(c => c.id === serialObj.currentCustomerId || c.id === serialObj.customerId);
 
-  const timeline = document.getElementById("equipmentTimeline");
-  timeline.innerHTML = item.history.map(evt => {
+    // Populate Ficha
+    document.getElementById("eqName").textContent = `[${product.sku}] ${product.name}`;
+    document.getElementById("eqSku").textContent = product.sku;
+    document.getElementById("eqIdentifierLabel").textContent = "Serial:";
+    document.getElementById("eqSerial").textContent = serialObj.serialNumber;
+    document.getElementById("eqStatusBadge").textContent = serialObj.status;
+    document.getElementById("eqEntryDate").textContent = serialObj.entryDate || '-';
+    document.getElementById("eqCustomer").textContent = custObj ? `${custObj.name} (${getCustomerDocText(custObj)})` : (serialObj.customerName || "En Bodega / Sin Cliente");
+    document.getElementById("eqInvoice").textContent = serialObj.invoiceNumber || "Sin Factura";
+    document.getElementById("eqMaintenanceCount").textContent = (serialObj.history || []).length;
+
+    // Calculate warranty status
+    const warrantyMonths = product.warrantyMonths || 12;
+    const saleDateObj = serialObj.saleDate ? new Date(serialObj.saleDate) : (serialObj.entryDate ? new Date(serialObj.entryDate) : new Date());
+    const expiryDateObj = new Date(saleDateObj);
+    expiryDateObj.setMonth(expiryDateObj.getMonth() + warrantyMonths);
+    const today = new Date();
+    const isWarrantyValid = (today <= expiryDateObj);
+    const daysRemaining = Math.max(0, Math.round((expiryDateObj - today) / (1000 * 60 * 60 * 24)));
+
+    const warrantyBadge = document.getElementById("eqWarrantyBadge");
+    if (warrantyBadge) {
+      warrantyBadge.className = isWarrantyValid ? "badge badge-green" : "badge badge-red";
+      warrantyBadge.textContent = isWarrantyValid ? `🛡️ GARANTÍA VIGENTE (${daysRemaining} Días)` : "❌ GARANTÍA EXPIRADA";
+    }
+
+    detailCard.style.display = "block";
+    renderEquipmentTimelineFiltered();
+  } else {
+    // Non-serialized item by custom identifier
+    const identifier = currentLifecycleState.customIdentifier || "ID-GENERAL";
+
+    document.getElementById("eqName").textContent = `[${product.sku}] ${product.name}`;
+    document.getElementById("eqSku").textContent = product.sku;
+    document.getElementById("eqIdentifierLabel").textContent = "Identificador:";
+    document.getElementById("eqSerial").textContent = identifier;
+    document.getElementById("eqStatusBadge").textContent = "CONTROL_POR_LOTE";
+    document.getElementById("eqEntryDate").textContent = product.createdAt || "-";
+    document.getElementById("eqCustomer").textContent = "Múltiples Clientes (No Serializado)";
+    document.getElementById("eqInvoice").textContent = "N/A";
+
+    const warrantyBadge = document.getElementById("eqWarrantyBadge");
+    if (warrantyBadge) {
+      warrantyBadge.className = "badge badge-purple";
+      warrantyBadge.textContent = `📦 Cobertura General (${product.warrantyMonths || 0} Meses)`;
+    }
+
+    detailCard.style.display = "block";
+    renderEquipmentTimelineFiltered();
+  }
+}
+
+function getLifecycleActiveEvents() {
+  const product = (appState.products || []).find(p => p.id === currentLifecycleState.productId);
+  if (!product) return [];
+
+  if (currentLifecycleState.isSerialized) {
+    const serialObj = (appState.serializedItems || []).find(s => s.id === currentLifecycleState.serialId);
+    if (!serialObj) return [];
+    return serialObj.history || [];
+  } else {
+    if (!product.customLifecycleHistory) product.customLifecycleHistory = {};
+    const ident = currentLifecycleState.customIdentifier || "ID-GENERAL";
+    if (!product.customLifecycleHistory[ident]) product.customLifecycleHistory[ident] = [];
+    return product.customLifecycleHistory[ident];
+  }
+}
+
+function resetLifecycleTimelineFilters() {
+  const fUser = document.getElementById("lfFilterUser");
+  const fStart = document.getElementById("lfFilterDateStart");
+  const fEnd = document.getElementById("lfFilterDateEnd");
+  const fKw = document.getElementById("lfFilterKeyword");
+
+  if (fUser) fUser.value = "ALL";
+  if (fStart) fStart.value = "";
+  if (fEnd) fEnd.value = "";
+  if (fKw) fKw.value = "";
+
+  renderEquipmentTimelineFiltered();
+}
+
+function renderEquipmentTimelineFiltered() {
+  const timelineContainer = document.getElementById("equipmentTimeline");
+  if (!timelineContainer) return;
+
+  const rawEvents = getLifecycleActiveEvents();
+  const countElem = document.getElementById("eqMaintenanceCount");
+  if (countElem) countElem.textContent = rawEvents.length;
+
+  const filterUser = (document.getElementById("lfFilterUser")?.value || "ALL").trim();
+  const filterDateStart = document.getElementById("lfFilterDateStart")?.value || "";
+  const filterDateEnd = document.getElementById("lfFilterDateEnd")?.value || "";
+  const filterKw = (document.getElementById("lfFilterKeyword")?.value || "").toLowerCase().trim();
+
+  // Filter events
+  let filtered = rawEvents.filter(evt => {
+    // User filter
+    if (filterUser !== "ALL") {
+      const evtUser = (evt.user || "").trim().toLowerCase();
+      if (!evtUser.includes(filterUser.toLowerCase())) return false;
+    }
+    // Date range filter
+    if (filterDateStart && evt.date && evt.date < filterDateStart) return false;
+    if (filterDateEnd && evt.date && evt.date > filterDateEnd) return false;
+    // Keyword search (en tipo, descripción, usuario o nombre de archivo adjunto)
+    if (filterKw) {
+      const typeStr = (evt.type || "").toLowerCase();
+      const descStr = (evt.description || "").toLowerCase();
+      const userStr = (evt.user || "").toLowerCase();
+      const attsStr = (evt.attachments || []).map(a => a.name).join(' ').toLowerCase();
+      const matches = typeStr.includes(filterKw) || descStr.includes(filterKw) || userStr.includes(filterKw) || attsStr.includes(filterKw);
+      if (!matches) return false;
+    }
+    return true;
+  });
+
+  // ORDENAR DEL MÁS RECIENTE AL MÁS ANTIGUO (Newest to Oldest)
+  filtered.sort((a, b) => {
+    const dateA = new Date(a.date || 0).getTime();
+    const dateB = new Date(b.date || 0).getTime();
+    return dateB - dateA;
+  });
+
+  if (filtered.length === 0) {
+    timelineContainer.innerHTML = `
+      <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.85rem; background: rgba(15,23,42,0.4); border-radius: var(--radius-md); border: 1px dashed var(--border-color);">
+        🔍 No se encontraron eventos registrados que coincidan con los filtros aplicados.
+      </div>
+    `;
+    return;
+  }
+
+  timelineContainer.innerHTML = filtered.map(evt => {
     const atts = evt.attachments || [];
+    const markerIcon = evt.type.includes("RETORNO") ? '✈️' : (evt.type.includes("FALLA") ? '⚠️' : (evt.type.includes("MANTENIMIENTO") ? '🔧' : '📋'));
     return `
       <div class="timeline-item">
-        <div class="timeline-marker">🔹</div>
+        <div class="timeline-marker">${markerIcon}</div>
         <div class="timeline-content">
           <div class="timeline-header">
             <span class="timeline-title">${evt.type}</span>
-            <span class="timeline-date">${evt.date} • Resp: ${evt.user}</span>
+            <span class="timeline-date">📅 ${evt.date} • 👤 Resp: <strong>${evt.user}</strong></span>
           </div>
-          <div style="font-size: 0.85rem; color: var(--text-muted);">${evt.description}</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">${evt.description}</div>
           ${atts.length > 0 ? `
-            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem;">
+            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.6rem;">
               ${atts.map(a => `
-                <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: var(--accent-green);" onclick="previewAttachment('${a.name}', '${a.type}', ${a.dataUrl ? `'${a.dataUrl}'` : 'null'})">
-                  ${a.icon || '📷'} ${a.name} (Ver Soporte)
+                <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.55rem; font-size: 0.75rem; color: var(--accent-green); display: inline-flex; align-items: center; gap: 0.25rem;" onclick="previewAttachment('${a.name}', '${a.type}', ${a.dataUrl ? `'${a.dataUrl}'` : 'null'})">
+                  ${a.icon || (a.type === 'pdf' ? '📄' : '📷')} ${a.name} (Ver Soporte)
                 </button>
               `).join('')}
             </div>
@@ -108702,67 +109199,261 @@ function renderEquipmentLifeCycle() {
       </div>
     `;
   }).join('');
-
-  detailCard.style.display = "block";
 }
 
 function openAddEventModal() {
-  const serialId = document.getElementById("equipmentSerialSelect").value;
-  const item = appState.serializedItems.find(i => i.id === serialId);
-  if (!item) return;
+  if (!currentLifecycleState.productId) {
+    alert("⚠️ Por favor seleccione primero un producto del catálogo.");
+    return;
+  }
 
-  const eventType = prompt("Ingrese tipo de evento (MANTENIMIENTO_PREVENTIVO, FALLA_REPORTADA, RETORNO_FABRICA_CHINA):", "MANTENIMIENTO_PREVENTIVO");
-  if (!eventType) return;
+  if (currentLifecycleState.isSerialized && !currentLifecycleState.serialId) {
+    alert("⚠️ Por favor seleccione el número de serie al cual registrará el evento.");
+    return;
+  }
 
-  const desc = prompt("Detalles del evento:", "Revisión preventiva anual de sonda ecográfica");
-  if (!desc) return;
+  const form = document.getElementById("addEquipmentEventForm");
+  if (form) form.reset();
 
-  const fileName = prompt("Nombre de foto/soporte adjunto (Opcional):", "Foto_Mantenimiento_Sonda.jpg");
+  const dateInput = document.getElementById("eventModalDate");
+  if (dateInput) dateInput.value = new Date().toISOString().substring(0, 10);
 
-  const attachments = fileName ? [{ name: fileName, type: 'image', icon: '📷' }] : [];
+  eventModalSelectedFiles = [];
+  const previewDiv = document.getElementById("eventModalFilesPreview");
+  if (previewDiv) previewDiv.innerHTML = "";
 
-  item.history.push({
-    type: eventType.toUpperCase(),
-    date: new Date().toISOString().substring(0, 10),
-    user: appState.currentUser.name,
-    description: desc,
-    attachments
+  document.getElementById("addEquipmentEventModal").classList.add("active");
+}
+
+function closeAddEquipmentEventModal() {
+  document.getElementById("addEquipmentEventModal").classList.remove("active");
+  eventModalSelectedFiles = [];
+}
+
+function renderEventFilesPreview(fileInput) {
+  const previewDiv = document.getElementById("eventModalFilesPreview");
+  if (!previewDiv || !fileInput.files) return;
+
+  eventModalSelectedFiles = [];
+  previewDiv.innerHTML = "";
+
+  Array.from(fileInput.files).forEach(file => {
+    const isImage = file.type.startsWith('image/');
+    const isPdf = file.type === 'application/pdf';
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      eventModalSelectedFiles.push({
+        name: file.name,
+        type: isPdf ? 'pdf' : 'image',
+        icon: isPdf ? '📄' : '📷',
+        dataUrl: e.target.result
+      });
+
+      const pill = document.createElement("span");
+      pill.style.cssText = "font-size: 0.72rem; padding: 0.15rem 0.45rem; background: rgba(56,189,248,0.15); color: var(--accent-teal); border: 1px solid rgba(56,189,248,0.3); border-radius: 4px; display: inline-flex; align-items: center; gap: 0.2rem;";
+      pill.innerHTML = `${isPdf ? '📄' : '📷'} ${file.name}`;
+      previewDiv.appendChild(pill);
+    };
+
+    reader.readAsDataURL(file);
   });
+}
 
-  if (eventType.includes("RETORNO")) item.status = "RETORNO_CHINA";
+function handleSaveEquipmentEvent(e) {
+  e.preventDefault();
 
-  addActivityLog("CREACION", "EquipmentEvent", `Registro de evento '${eventType}' para serial '${item.serialNumber}'`);
+  const type = document.getElementById("eventModalType").value;
+  const date = document.getElementById("eventModalDate").value;
+  const description = document.getElementById("eventModalDescription").value.trim();
+
+  if (!description) {
+    alert("⚠️ Por favor ingrese la descripción del evento.");
+    return;
+  }
+
+  const newEvent = {
+    type,
+    date,
+    user: (appState.currentUser ? appState.currentUser.name : 'Usuario'),
+    description,
+    attachments: [...eventModalSelectedFiles]
+  };
+
+  if (currentLifecycleState.isSerialized) {
+    const serialObj = (appState.serializedItems || []).find(s => s.id === currentLifecycleState.serialId);
+    if (serialObj) {
+      if (!serialObj.history) serialObj.history = [];
+      serialObj.history.push(newEvent);
+      if (type.includes("RETORNO")) serialObj.status = "RETORNO_CHINA";
+      addActivityLog("CREACION", "EquipmentEvent", `Registro de evento '${type}' para serial '${serialObj.serialNumber}'`);
+      saveSerialsToDisk();
+    }
+  } else {
+    const prod = (appState.products || []).find(p => p.id === currentLifecycleState.productId);
+    if (prod) {
+      if (!prod.customLifecycleHistory) prod.customLifecycleHistory = {};
+      const ident = currentLifecycleState.customIdentifier || "ID-GENERAL";
+      if (!prod.customLifecycleHistory[ident]) prod.customLifecycleHistory[ident] = [];
+      prod.customLifecycleHistory[ident].push(newEvent);
+      addActivityLog("CREACION", "ProductEvent", `Registro de evento '${type}' para producto '${prod.sku}' con ID '${ident}'`);
+      saveProductsToDisk();
+    }
+  }
+
+  closeAddEquipmentEventModal();
   renderEquipmentLifeCycle();
+  alert("✅ Evento y soportes registrados exitosamente en la Hoja de Vida.");
+}
+
+function resetReservationFilters() {
+  const fCust = document.getElementById("resFilterCustomer");
+  const fStat = document.getElementById("resFilterStatus");
+  const fUser = document.getElementById("resFilterUser");
+  const fMinQ = document.getElementById("resFilterMinQty");
+  const fStart = document.getElementById("resFilterDateStart");
+  const fEnd = document.getElementById("resFilterDateEnd");
+
+  if (fCust) fCust.value = "";
+  if (fStat) fStat.value = "ALL";
+  if (fUser) fUser.value = "ALL";
+  if (fMinQ) fMinQ.value = "";
+  if (fStart) fStart.value = "";
+  if (fEnd) fEnd.value = "";
+
+  renderReservations();
 }
 
 function renderReservations() {
   const tableBody = document.getElementById("reservationsTableBody");
   if (!tableBody) return;
-  if (!appState.reservations || appState.reservations.length === 0) {
-    tableBody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">No hay reservas ni bloqueos de stock activos.</td></tr>`;
+
+  const countBadge = document.getElementById("reservationCountBadge");
+  const allReservations = appState.reservations || [];
+
+  if (allReservations.length === 0) {
+    tableBody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-muted);">No hay reservas registradas en el sistema.</td></tr>`;
+    if (countBadge) countBadge.textContent = "0 registros";
     return;
   }
-  tableBody.innerHTML = appState.reservations.map(r => {
+
+  // Filter inputs
+  const filterCust = (document.getElementById("resFilterCustomer")?.value || "").toLowerCase().trim();
+  const filterStat = document.getElementById("resFilterStatus")?.value || "ALL";
+  const filterUser = document.getElementById("resFilterUser")?.value || "ALL";
+  const filterMinQty = parseInt(document.getElementById("resFilterMinQty")?.value, 10);
+  const filterDateStart = document.getElementById("resFilterDateStart")?.value || "";
+  const filterDateEnd = document.getElementById("resFilterDateEnd")?.value || "";
+
+  // Filter logic
+  let filtered = allReservations.filter(r => {
+    // 1. Estado
+    const isLiberada = (r.status === "LIBERADA" || r.status === "CANCELADA");
+    if (filterStat === "ACTIVA" && isLiberada) return false;
+    if (filterStat === "LIBERADA" && !isLiberada) return false;
+
+    // 2. Cliente
+    if (filterCust) {
+      const cust = appState.customers.find(c => c.id === r.customerId || (c.documentNumber && c.documentNumber === r.customerId));
+      const cName = (cust ? cust.name : (r.customerName || '')).toLowerCase();
+      const cDoc = (cust ? `${cust.documentType || ''} ${cust.documentNumber || ''}` : '').toLowerCase();
+      if (!cName.includes(filterCust) && !cDoc.includes(filterCust) && !(r.customerId || '').toLowerCase().includes(filterCust)) {
+        return false;
+      }
+    }
+
+    // 3. Usuario Creador
+    if (filterUser && filterUser !== "ALL") {
+      const userMatch = (r.createdByUserId === filterUser || r.createdBy === filterUser || (r.createdBy && r.createdBy.toLowerCase().includes(filterUser.toLowerCase())));
+      if (!userMatch) return false;
+    }
+
+    // 4. Cantidad Mínima
+    if (!isNaN(filterMinQty) && filterMinQty > 0) {
+      if ((r.quantity || 0) < filterMinQty) return false;
+    }
+
+    // 5. Rango de Fechas
+    const resDateStr = (r.reservationDate || r.date || r.createdAt || '').substring(0, 10);
+    if (filterDateStart && resDateStr && resDateStr < filterDateStart) return false;
+    if (filterDateEnd && resDateStr && resDateStr > filterDateEnd) return false;
+
+    return true;
+  });
+
+  // Ordenar siempre del más reciente al más antiguo
+  filtered.sort((a, b) => {
+    const timeA = new Date(a.reservationDate || a.createdAt || a.date || 0).getTime() || 0;
+    const timeB = new Date(b.reservationDate || b.createdAt || b.date || 0).getTime() || 0;
+    if (timeB !== timeA) return timeB - timeA;
+    return (b.id || '').localeCompare(a.id || '');
+  });
+
+  if (countBadge) {
+    countBadge.textContent = `${filtered.length} de ${allReservations.length} reservas`;
+  }
+
+  if (filtered.length === 0) {
+    tableBody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-muted);">No se encontraron reservas con los filtros seleccionados.</td></tr>`;
+    return;
+  }
+
+  tableBody.innerHTML = filtered.map(r => {
     const prod = appState.products.find(p => p.id === r.productId || p.sku === r.productId);
     const cust = appState.customers.find(c => c.id === r.customerId || (c.documentNumber && c.documentNumber === r.customerId));
     const locObj = appState.locations ? appState.locations.find(l => l.id === r.locationId) : null;
     const locName = locObj ? locObj.name : (r.locationId || 'Sede Principal');
+    const isLiberada = r.status === "LIBERADA" || r.status === "CANCELADA";
+
+    // Formatear Fecha y Hora
+    let formattedDateTime = '-';
+    const rawDate = r.reservationDate || r.createdAt || r.date;
+    if (rawDate) {
+      try {
+        const d = new Date(rawDate);
+        if (!isNaN(d.getTime())) {
+          formattedDateTime = d.toLocaleDateString('es-CO', { 
+            year: 'numeric', 
+            month: '2-digit', 
+            day: '2-digit',
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: true 
+          });
+        } else {
+          formattedDateTime = rawDate;
+        }
+      } catch (e) {
+        formattedDateTime = rawDate;
+      }
+    }
+
+    const createdByDisplay = r.createdBy || (r.createdByUserId ? (appState.users?.find(u => u.id === r.createdByUserId)?.name || r.createdByUserId) : 'Sistema');
+
+    const statusBadge = isLiberada 
+      ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.76rem;">LIBERADA</span>`
+      : `<span class="badge badge-amber" style="font-size: 0.76rem;">ACTIVA</span>`;
+
+    const actionButton = isLiberada
+      ? `<button class="btn btn-secondary" disabled style="padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; opacity: 0.45; cursor: not-allowed; border-color: rgba(148, 163, 184, 0.3); color: var(--text-muted);">
+          ✅ Liberada
+        </button>`
+      : `<button class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" onclick="cancelReservation('${r.id}')">
+          🔓 Liberar Stock
+        </button>`;
 
     return `
-      <tr>
+      <tr style="${isLiberada ? 'opacity: 0.78;' : ''}">
         <td><strong>${r.id}</strong></td>
         <td>${cust ? cust.name : (r.customerName || 'Cliente')}</td>
         <td>${prod ? `<strong>${prod.sku}</strong> - ${prod.name}` : (r.productSku || 'Producto')}</td>
         <td><span class="badge badge-purple" style="font-size: 0.75rem;">📍 ${locName}</span></td>
-        <td><strong style="color: var(--accent-amber);">${r.quantity}</strong></td>
-        <td>${r.reason}</td>
-        <td>${r.date || r.reservationDate || '-'}</td>
-        <td><span class="badge badge-amber">${r.status || 'ACTIVA'}</span></td>
-        <td>
-          <button class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" onclick="cancelReservation('${r.id}')">
-            🔓 Liberar Stock
-          </button>
-        </td>
+        <td><strong style="color: ${isLiberada ? 'var(--text-muted)' : 'var(--accent-amber)'};">${r.quantity}</strong></td>
+        <td>${r.reason || '-'}</td>
+        <td style="font-size: 0.8rem; white-space: nowrap;"><span style="color: var(--text-muted);">🕒</span> ${formattedDateTime}</td>
+        <td><span style="font-size: 0.78rem; color: var(--text-muted);">${createdByDisplay}</span></td>
+        <td>${statusBadge}</td>
+        <td>${actionButton}</td>
       </tr>
     `;
   }).join('');
@@ -108805,20 +109496,47 @@ function handleCreateReservation(e) {
 
   if (!customerId && custInputVal) {
     const match = appState.customers.find(c => {
-      const docLabel = (c.documentType === "NIT" || c.documentTypeAbbr === "NIT") ? `nit ${c.documentNumber || c.documentNum}` : `cc ${c.documentNumber || c.documentNum}`;
-      const text = `${c.name} (${docLabel})`.toLowerCase();
       const docNum = (c.documentNumber || c.documentNum || '').toString().toLowerCase();
-      return text.includes(custInputVal) || c.name.toLowerCase().includes(custInputVal) || (docNum && custInputVal.includes(docNum)) || (docNum && docNum.includes(custInputVal));
+      const docType = (c.documentType || c.documentTypeAbbr || 'NIT').toLowerCase();
+      const docLabel = `${docType} ${docNum}`;
+      const name = (c.name || '').toLowerCase();
+      const text = `${name} (${docLabel})`.toLowerCase();
+      return text.includes(custInputVal) || custInputVal.includes(name) || name.includes(custInputVal) || (docNum && (custInputVal.includes(docNum) || docNum.includes(custInputVal)));
     });
     if (match) customerId = match.id;
   }
 
   if (!productId && prodInputVal) {
+    // Try exact SKU match, substring SKU match, or clean title without stock tag
+    const cleanProdInput = prodInputVal.replace(/\(stock\s*disp:?[^)]*\)/i, '').trim();
     const match = appState.products.find(p => {
-      const text = `${p.sku} - ${p.name}`.toLowerCase();
-      return text.includes(prodInputVal) || p.sku.toLowerCase().includes(prodInputVal) || p.name.toLowerCase().includes(prodInputVal);
+      const sku = (p.sku || '').toLowerCase();
+      const name = (p.name || '').toLowerCase();
+      const text = `${sku} - ${name}`.toLowerCase();
+      return text.includes(cleanProdInput) || 
+             cleanProdInput.includes(sku) || 
+             (sku && prodInputVal.startsWith(sku)) ||
+             (name && cleanProdInput.includes(name)) ||
+             text.includes(prodInputVal) || 
+             sku.includes(prodInputVal) || 
+             name.includes(prodInputVal);
     });
     if (match) productId = match.id;
+  }
+
+  // Also verify if productId was set to a SKU instead of ID
+  let product = appState.products.find(p => p.id === productId || p.sku === productId);
+  if (!product && productId) {
+    product = appState.products.find(p => p.id == productId || p.sku == productId);
+  }
+  if (!product && prodInputVal) {
+    const cleanProdInput = prodInputVal.replace(/\(stock\s*disp:?[^)]*\)/i, '').trim();
+    product = appState.products.find(p => {
+      const sku = (p.sku || '').toLowerCase();
+      const name = (p.name || '').toLowerCase();
+      return sku === cleanProdInput || (sku && prodInputVal.startsWith(sku)) || (name && cleanProdInput.includes(name));
+    });
+    if (product) productId = product.id;
   }
 
   if (!customerId) {
@@ -108826,10 +109544,11 @@ function handleCreateReservation(e) {
     return;
   }
 
-  if (!productId) {
+  if (!product) {
     alert("⚠️ Por favor busque y seleccione un producto válido de la lista.");
     return;
   }
+  productId = product.id;
 
   if (!locationId) {
     alert("⚠️ Por favor seleccione la ubicación / sede de la cual se va a reservar el stock.");
@@ -108841,12 +109560,6 @@ function handleCreateReservation(e) {
 
   if (quantity <= 0) {
     alert("⚠️ La cantidad a reservar debe ser mayor a 0.");
-    return;
-  }
-
-  const product = appState.products.find(p => p.id === productId);
-  if (!product) {
-    alert("⚠️ Producto no encontrado.");
     return;
   }
 
@@ -108869,6 +109582,9 @@ function handleCreateReservation(e) {
   product.reservedStock = (product.reservedStock || 0) + quantity;
 
   const custObj = appState.customers.find(c => c.id === customerId);
+  const currentUserName = appState.currentUser ? `${appState.currentUser.firstName || ''} ${appState.currentUser.lastName || appState.currentUser.name || ''}`.trim() || appState.currentUser.email : "Usuario";
+  const currentUserId = appState.currentUser ? (appState.currentUser.id || appState.currentUser.email) : "usr-admin";
+  const nowIso = new Date().toISOString();
 
   const newRes = {
     id: `res-${Date.now().toString().slice(-6)}`,
@@ -108880,8 +109596,11 @@ function handleCreateReservation(e) {
     quantity,
     reason: reason || "Reserva de Stock",
     status: "ACTIVA",
-    date: new Date().toISOString().substring(0, 10),
-    reservationDate: new Date().toISOString().substring(0, 10)
+    date: nowIso.substring(0, 10),
+    reservationDate: nowIso,
+    createdBy: currentUserName,
+    createdByUserId: currentUserId,
+    createdAt: nowIso
   };
 
   if (!appState.reservations) appState.reservations = [];
@@ -108890,16 +109609,22 @@ function handleCreateReservation(e) {
   saveReservationsToDisk();
   addActivityLog("CREACION", "Reservation", `Bloqueo/Reserva de ${quantity} unidades para ${product.sku} en '${locName}'. Motivo: ${reason}`);
 
-  alert(`✅ Stock reservado y bloqueado exitosamente en '${locName}'.`);
   closeReservationModal();
   document.getElementById("newReservationForm")?.reset();
   const resCustSelect = document.getElementById("resCustomerSelect");
   if (resCustSelect) resCustSelect.value = "";
   const resProdSelect = document.getElementById("resProductSelect");
   if (resProdSelect) resProdSelect.value = "";
+  const resCustInput = document.getElementById("resCustomerInput");
+  if (resCustInput) resCustInput.value = "";
+  const resProdInput = document.getElementById("resProductInput");
+  if (resProdInput) resProdInput.value = "";
 
   populateDropdowns();
+  renderReservations();
   renderAllViews();
+
+  alert(`✅ Stock reservado y bloqueado exitosamente en '${locName}'.`);
 }
 
 function filterResCustomerAutocomplete(query = "") {
@@ -109002,6 +109727,11 @@ function cancelReservation(resId) {
   const res = appState.reservations.find(r => r.id === resId);
   if (!res) return;
 
+  if (res.status === "LIBERADA" || res.status === "CANCELADA") {
+    alert("⚠️ Esta reserva ya se encuentra liberada.");
+    return;
+  }
+
   const product = appState.products.find(p => p.id === res.productId || p.sku === res.productId);
   const cust = appState.customers.find(c => c.id === res.customerId || c.documentNumber === res.customerId);
   const custName = cust ? cust.name : (res.customerName || "Cliente");
@@ -109014,8 +109744,8 @@ function cancelReservation(resId) {
     product.reservedStock = Math.max(0, (product.reservedStock || 0) - res.quantity);
   }
 
-  res.status = "CANCELADA";
-  appState.reservations = appState.reservations.filter(r => r.id !== resId);
+  res.status = "LIBERADA";
+  res.releasedAt = new Date().toISOString();
 
   saveProductsToDisk();
   saveReservationsToDisk();
@@ -109186,6 +109916,19 @@ function renderMarginReport() {
   }).join('');
 }
 
+function getCustomerDocText(c) {
+  if (!c) return 'Sin Doc';
+  if (c.rawDoc && c.rawDoc.trim()) return c.rawDoc.trim();
+  if (c.documentNumber && c.documentNumber.trim()) {
+    return c.verificationDigit ? `${c.documentNumber}-${c.verificationDigit}` : c.documentNumber;
+  }
+  if (c.documentNum && c.documentNum.trim()) return c.documentNum.trim();
+  if (c.document && c.document.trim()) return c.document.trim();
+  if (c.nit && c.nit.trim()) return c.nit.trim();
+  if (c.taxId && c.taxId.trim()) return c.taxId.trim();
+  return 'Sin Doc';
+}
+
 function selectAutocompleteCustomer(customerId) {
   const hiddenInput = document.getElementById("movCustomer");
   const searchInput = document.getElementById("movCustomerSearchInput");
@@ -109201,7 +109944,7 @@ function selectAutocompleteCustomer(customerId) {
   const customer = customerList.find(c => c.id === customerId);
   if (customer) {
     hiddenInput.value = customer.id;
-    const docText = customer.document || customer.nit || customer.taxId || 'Sin Doc';
+    const docText = getCustomerDocText(customer);
     const nameText = customer.name || customer.legalName || 'Cliente General';
 
     selectedCard.innerHTML = `
@@ -109245,37 +109988,52 @@ function renderCustomerSuggestions() {
 
   if (!searchInput || !suggestions) return;
 
-  const q = searchInput.value.toLowerCase().trim();
+  const rawQ = searchInput.value.toLowerCase().trim();
+  const qClean = rawQ.replace(/[^a-z0-9]/g, '');
   const customerList = (appState.customers && Array.isArray(appState.customers) && appState.customers.length > 0)
     ? appState.customers
     : initialCustomers;
 
   const matches = customerList.filter(c => {
+    if (!rawQ) return true;
     const name = (c.name || c.legalName || '').toLowerCase();
-    const doc = (c.document || c.nit || c.taxId || '').toLowerCase();
+    const doc = (c.document || c.documentNumber || c.documentNum || c.rawDoc || c.nit || c.taxId || '').toLowerCase();
+    const docClean = doc.replace(/[^a-z0-9]/g, '');
     const phone = (c.phone || '').toLowerCase();
     const email = (c.email || '').toLowerCase();
-    return !q || name.includes(q) || doc.includes(q) || phone.includes(q) || email.includes(q);
-  }).slice(0, 15);
+    const city = (c.city || '').toLowerCase();
+
+    return name.includes(rawQ) ||
+           doc.includes(rawQ) ||
+           (qClean.length >= 2 && docClean.includes(qClean)) ||
+           phone.includes(rawQ) ||
+           email.includes(rawQ) ||
+           city.includes(rawQ);
+  }).slice(0, 20);
 
   if (matches.length === 0) {
     suggestions.innerHTML = `
       <div style="padding: 0.75rem; text-align: center; color: var(--text-muted); font-size: 0.82rem;">
-        No se encontraron clientes o proveedores coincidentes.
+        No se encontraron clientes o proveedores coincidentes con '${rawQ}'.
       </div>
     `;
   } else {
     suggestions.innerHTML = matches.map(c => {
-      const docText = c.document || c.nit || c.taxId || 'Sin Doc';
+      const docText = getCustomerDocText(c);
+      const docType = c.documentType || c.documentTypeAbbr || 'Doc';
       const nameText = c.name || c.legalName || 'Cliente';
       return `
-        <div class="suggestion-item" onclick="selectAutocompleteCustomer('${c.id}')" style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); cursor: pointer;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="suggestion-item" onclick="selectAutocompleteCustomer('${c.id}')" style="padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border-color); cursor: pointer;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
             <strong style="color: var(--accent-green); font-size: 0.85rem;">👤 ${nameText}</strong>
-            <span style="font-size: 0.72rem; color: var(--text-muted);">NIT/Doc: ${docText}</span>
+            <span style="font-size: 0.75rem; color: var(--accent-teal, #38bdf8); background: rgba(56, 189, 248, 0.1); padding: 0.1rem 0.4rem; border-radius: 4px; white-space: nowrap;">
+              🪪 ${docType}: <strong>${docText}</strong>
+            </span>
           </div>
-          <div style="font-size: 0.73rem; color: var(--text-muted); margin-top: 0.15rem;">
-            📞 ${c.phone || 'Sin tel'} | ✉️ ${c.email || 'Sin correo'} | 📍 ${c.city || c.address || 'Colombia'}
+          <div style="font-size: 0.73rem; color: var(--text-muted); margin-top: 0.2rem; display: flex; gap: 0.6rem; flex-wrap: wrap;">
+            <span>📞 ${c.phone || 'Sin tel'}</span>
+            <span>✉️ ${c.email || 'Sin correo'}</span>
+            <span>📍 ${c.city || c.address || 'Colombia'}</span>
           </div>
         </div>
       `;
@@ -109471,14 +110229,26 @@ function simulateBarcodeScan(scannedCode) {
     return;
   }
 
-  // 3. Search serialized item by serial number
-  const item = appState.serializedItems.find(i => i.serialNumber.toLowerCase().includes(codeLower));
+  // If currently in view-equipment or scan matches a serialized item
+  const item = appState.serializedItems.find(i => i.serialNumber.toLowerCase() === codeLower || i.serialNumber.toLowerCase().includes(codeLower));
   if (item) {
     switchView('view-equipment');
-    const input = document.getElementById("warrantySerialInput");
-    if (input) input.value = item.serialNumber;
-    lookupWarrantyBySerial(item.serialNumber);
-    alert(`📷 SERIAL DETECTADO CON ÉXITO: ${item.serialNumber}`);
+    const prod = appState.products.find(p => p.id === item.productId);
+    if (prod) {
+      selectLifecycleProduct(prod.id);
+      setTimeout(() => {
+        selectLifecycleSerial(item.id);
+      }, 50);
+    }
+    alert(`📷 SERIAL DETECTADO CON ÉXITO:\n"${item.serialNumber}"\n\nProducto: ${prod ? prod.name : 'Equipo'}\nEstado: ${item.status}\n\nSe ha abierto su Hoja de Vida y Trazabilidad.`);
+    return;
+  }
+
+  // Check if active view is view-equipment and code matches a product
+  const activeSection = document.querySelector(".view-section.active");
+  if (activeSection && activeSection.id === "view-equipment" && product) {
+    selectLifecycleProduct(product.id);
+    alert(`📷 PRODUCTO SELECCIONADO EN HOJA DE VIDA:\n[${product.sku}] ${product.name}`);
     return;
   }
 
@@ -109511,6 +110281,29 @@ function handleCreateProduct(e) {
   const baseCost = parseFloat(document.getElementById("newBaseCost").value) || 0;
   const salePrice = parseFloat(document.getElementById("newSalePrice").value) || 0;
 
+  if (!sku) {
+    alert("⚠️ El código SKU del producto es obligatorio.");
+    return;
+  }
+
+  // Validar duplicidad de SKU (código de producto)
+  const normSku = sku.toLowerCase();
+  const existingProductWithSku = appState.products.find(p => (p.sku || "").trim().toLowerCase() === normSku);
+  if (existingProductWithSku) {
+    alert(`❌ NO SE PUEDE CREAR EL PRODUCTO:\n\nYa existe un producto registrado con el código SKU '${existingProductWithSku.sku}' (${existingProductWithSku.name}).\n\nLos códigos de producto deben ser únicos en el sistema.`);
+    return;
+  }
+
+  // Validar duplicidad de Código de Barras si se especificó
+  if (barcode) {
+    const normBarcode = barcode.toLowerCase();
+    const existingWithBarcode = appState.products.find(p => (p.barcode || "").trim().toLowerCase() === normBarcode);
+    if (existingWithBarcode) {
+      alert(`❌ NO SE PUEDE CREAR EL PRODUCTO:\n\nYa existe un producto con el código de barras '${existingWithBarcode.barcode}' (SKU: ${existingWithBarcode.sku} - ${existingWithBarcode.name}).`);
+      return;
+    }
+  }
+
   const categoryObj = appState.categories.find(c => c.id === categoryId);
 
   const newProd = {
@@ -109535,10 +110328,12 @@ function handleCreateProduct(e) {
   saveProductsToDisk();
   addActivityLog("CREACION", "ProductManagement", `Creación de producto nuevo en catálogo '${sku} - ${name}' (Barcode: ${barcode || 'N/A'})`);
 
-  alert(`✅ Producto ${sku} creado exitosamente.`);
   closeProductModal();
+  document.getElementById("newProductForm")?.reset();
   populateDropdowns();
   renderAllViews();
+
+  alert(`✅ Producto ${sku} creado exitosamente.`);
 }
 
 function openEditProductModal(productId) {
@@ -109748,6 +110543,29 @@ function handleUpdateProduct(e) {
   const minStockAlert = parseInt(document.getElementById("editMinStock").value) || 0;
   const warrantyMonths = parseInt(document.getElementById("editWarrantyMonths").value) || 0;
   const requiresSerial = document.getElementById("editReqSerial").value === "true";
+
+  if (!sku) {
+    alert("⚠️ El código SKU del producto es obligatorio.");
+    return;
+  }
+
+  // Validar que otro producto no tenga el mismo SKU
+  const normSku = sku.toLowerCase();
+  const duplicateSkuProd = appState.products.find(p => p.id !== product.id && (p.sku || "").trim().toLowerCase() === normSku);
+  if (duplicateSkuProd) {
+    alert(`❌ NO SE PUEDE ACTUALIZAR EL PRODUCTO:\n\nYa existe otro producto con el código SKU '${duplicateSkuProd.sku}' (${duplicateSkuProd.name}).\n\nLos códigos de producto deben ser únicos.`);
+    return;
+  }
+
+  // Validar que otro producto no tenga el mismo código de barras
+  if (barcode) {
+    const normBarcode = barcode.toLowerCase();
+    const duplicateBarcodeProd = appState.products.find(p => p.id !== product.id && (p.barcode || "").trim().toLowerCase() === normBarcode);
+    if (duplicateBarcodeProd) {
+      alert(`❌ NO SE PUEDE ACTUALIZAR EL PRODUCTO:\n\nYa existe otro producto con el código de barras '${duplicateBarcodeProd.barcode}' (SKU: ${duplicateBarcodeProd.sku} - ${duplicateBarcodeProd.name}).`);
+      return;
+    }
+  }
 
   const categoryObj = appState.categories.find(c => c.id === categoryId);
 
@@ -109959,7 +110777,7 @@ async function loadAllFromAPI(shouldRenderAll = true) {
   if (!online) return; // sin backend, ya se cargó desde localStorage abajo
 
   try {
-    const [users, products, movements, customers, reservations, serials, categories] = await Promise.all([
+    const [users, products, movements, customers, reservations, serials, categories, locations] = await Promise.all([
       _apiGet('/users'),
       _apiGet('/products'),
       _apiGet('/movements'),
@@ -109967,11 +110785,16 @@ async function loadAllFromAPI(shouldRenderAll = true) {
       _apiGet('/reservations'),
       _apiGet('/serialized-items'),
       _apiGet('/categories'),
+      _apiGet('/locations'),
     ]);
 
     if (Array.isArray(users) && users.length > 0) {
       appState.users = users;
       localStorage.setItem("mascampo_users_db", JSON.stringify(users));
+    }
+    if (Array.isArray(locations) && locations.length > 0) {
+      appState.locations = locations;
+      localStorage.setItem("mascampo_locations_db", JSON.stringify(locations));
     }
     if (Array.isArray(products) && products.length > 0) {
       products.forEach(p => {
@@ -110001,8 +110824,8 @@ async function loadAllFromAPI(shouldRenderAll = true) {
       localStorage.setItem("mascampo_serialized_items_db", JSON.stringify(serials));
     }
     if (Array.isArray(categories) && categories.length > 0) {
-      if (!appState.categories) appState.categories = [];
       appState.categories = categories;
+      localStorage.setItem("mascampo_categories_db", JSON.stringify(categories));
     }
 
     if (shouldRenderAll) {
@@ -110154,6 +110977,52 @@ async function saveCustomersToDisk() {
   try {
     if (await checkBackendOnline()) await _apiPost('/customers', appState.customers);
   } catch (e) { console.warn('saveCustomersToDisk API:', e.message); }
+}
+
+function loadLocationsFromDisk() {
+  try {
+    const saved = localStorage.getItem("mascampo_locations_db");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        appState.locations = parsed;
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn("No se pudo cargar ubicaciones de localStorage", e);
+  }
+}
+
+async function saveLocationsToDisk() {
+  if (!appState.locations || !Array.isArray(appState.locations)) return;
+  try { localStorage.setItem("mascampo_locations_db", JSON.stringify(appState.locations)); } catch {}
+  try {
+    if (await checkBackendOnline()) await _apiPost('/locations', appState.locations);
+  } catch (e) { console.warn('saveLocationsToDisk API:', e.message); }
+}
+
+function loadCategoriesFromDisk() {
+  try {
+    const saved = localStorage.getItem("mascampo_categories_db");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        appState.categories = parsed;
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn("No se pudo cargar categorías de localStorage", e);
+  }
+}
+
+async function saveCategoriesToDisk() {
+  if (!appState.categories || !Array.isArray(appState.categories)) return;
+  try { localStorage.setItem("mascampo_categories_db", JSON.stringify(appState.categories)); } catch {}
+  try {
+    if (await checkBackendOnline()) await _apiPost('/categories', appState.categories);
+  } catch (e) { console.warn('saveCategoriesToDisk API:', e.message); }
 }
 
 function renderPendingValidationsView() {

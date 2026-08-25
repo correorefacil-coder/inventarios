@@ -828,91 +828,206 @@
         <!-- ========================================== -->
         <!-- VIEW 4: HOJA DE VIDA & BUSCADOR INVERSO GARANTÍAS -->
         <!-- ========================================== -->
+        <!-- VIEW 4: HOJA DE VIDA & GARANTÍAS -->
+        <!-- ========================================== -->
         <section id="view-equipment" class="view-section">
           <div class="panel-header">
             <div>
-              <h2 class="panel-title">Hoja de Vida & Consulta Inversa de Garantías por Serial</h2>
-              <p style="font-size: 0.85rem; color: var(--text-muted);">Búsqueda directa por número de serie con autocompletado en vivo y escáner de cámara</p>
+              <h2 class="panel-title">🩺 Hoja de Vida & Trazabilidad Inversa de Garantías</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Seleccione primero el producto del catálogo para consultar o registrar seriales, mantenimientos, eventos DIAN y garantías</p>
             </div>
           </div>
 
-          <div class="panel" style="background: linear-gradient(135deg, rgba(17, 24, 39, 0.9) 0%, rgba(16, 185, 129, 0.1) 100%); border-color: var(--border-highlight);">
-            <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--accent-green); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-              🛡️ Consultar Cobertura de Garantía & Devolución por Serial
-            </h3>
-            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
-              Búsqueda inteligente: Digite cualquier fragmento del serial (Ej. <strong style="color: var(--accent-green);">006</strong>), escanee con la cámara o seleccione de la lista.
-            </p>
-
-            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-start;">
-              <div class="suggestions-wrapper" style="flex: 1; min-width: 250px;">
-                <input type="text" id="warrantySerialInput" class="form-control" placeholder="Digite o escanee serial (Ej. 006 o SN-MC-003...)" oninput="handleWarrantySerialInput(event)" autocomplete="off">
-                <div id="warrantySerialSuggestions" class="suggestions-box"></div>
-              </div>
-              
-              <button class="btn btn-camera" onclick="openCameraForWarranty()">
-                <span>📷</span> Escanear con Cámara
-              </button>
-
-              <button class="btn btn-primary" onclick="lookupWarrantyBySerial()">
-                🔍 Buscar Serial & Cobertura
-              </button>
+          <!-- PASO 1: SELECCIÓN DEL PRODUCTO -->
+          <div class="panel" style="background: linear-gradient(135deg, rgba(17, 24, 39, 0.95) 0%, rgba(16, 185, 129, 0.08) 100%); border-color: var(--border-highlight);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+              <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--accent-green); display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0;">
+                1️⃣ Seleccionar Producto del Catálogo (Autocompletar)
+              </h3>
+              <span id="lifecycleProductBadge" class="badge badge-purple" style="display: none; font-size: 0.75rem;"></span>
             </div>
 
-            <div id="warrantyResultCard" style="margin-top: 1.25rem; display: none;"></div>
+            <div class="form-group" style="position: relative; margin-bottom: 0.5rem;">
+              <div class="product-autocomplete-container">
+                <input type="text" id="lifecycleProductSearchInput" class="form-control" placeholder="🔍 Escriba el SKU o nombre del producto (Ej. ECO-PORT, DOPPLER, SONDA...)" autocomplete="off">
+                <input type="hidden" id="lifecycleSelectedProductId">
+                <div id="lifecycleProductSelectedCard" class="selected-product-card" style="display: none;"></div>
+                <div id="lifecycleProductSuggestions" class="autocomplete-dropdown-list" style="display: none;"></div>
+              </div>
+            </div>
           </div>
 
-          <div class="panel">
-            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Selección Directa de Hoja de Vida</h3>
-            <div class="form-row">
-              <div class="form-group" style="flex: 2;">
-                <label class="form-label" for="equipmentSerialSelect">Seleccionar Equipo por Número de Serie</label>
-                <select id="equipmentSerialSelect" class="form-control" onchange="renderEquipmentLifeCycle()">
-                  <!-- JS -->
-                </select>
+          <!-- PASO 2: SELECCIÓN DE SERIAL O IDENTIFICADOR (CONDICIONAL) -->
+          <div id="lifecycleSerialSection" class="panel" style="display: none; margin-top: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+              <h3 id="lifecycleSerialStepTitle" style="font-size: 1rem; font-weight: 700; color: var(--text-main); margin-bottom: 0;">
+                2️⃣ Selección de Serial o Identificador
+              </h3>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <button type="button" class="btn btn-camera" style="padding: 0.25rem 0.65rem; font-size: 0.78rem;" onclick="openCameraForLifecycleSerial()">
+                  📷 Escanear con Cámara
+                </button>
               </div>
-              <div class="form-group" style="align-self: flex-end;">
-                <button class="btn btn-primary" onclick="openAddEventModal()">
-                  <span>📋</span> + Evento con Fotos/Soportes
+            </div>
+
+            <!-- MODO A: PRODUCTO CON SERIALES INDIVIDUALES -->
+            <div id="lifecycleSerialModeA" style="display: none;">
+              <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.6rem;">
+                Este producto requiere trazabilidad serializada. Busque el serial (vendido o en bodega) o escanee con la cámara:
+              </p>
+              <div class="form-group" style="position: relative; margin-bottom: 0.5rem;">
+                <div class="product-autocomplete-container">
+                  <input type="text" id="lifecycleSerialSearchInput" class="form-control" placeholder="🔍 Digite o escanee el serial (Ej. SN-TED-2026-001 o cualquier fragmento...)" autocomplete="off">
+                  <input type="hidden" id="lifecycleSelectedSerialId">
+                  <div id="lifecycleSerialSelectedCard" class="selected-product-card" style="display: none;"></div>
+                  <div id="lifecycleSerialSuggestions" class="autocomplete-dropdown-list" style="display: none;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- MODO B: PRODUCTO SIN SERIALES (IDENTIFICADOR DE LOTE / PARTE) -->
+            <div id="lifecycleSerialModeB" style="display: none;">
+              <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.6rem;">
+                Este producto se controla por cantidad general. Ingrese un <strong>Identificador del Producto</strong> (Lote, Factura o Código de Referencia) para consultar o documentar su historial:
+              </p>
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                <div style="flex: 1; min-width: 250px;">
+                  <input type="text" id="lifecycleCustomIdentifierInput" class="form-control" placeholder="Ej. LOTE-2026-A1, FAC-88912 o ID de referencia..." oninput="handleLifecycleCustomIdentifierChange()">
+                </div>
+                <button type="button" class="btn btn-primary" onclick="lookupLifecycleByIdentifier()">
+                  🔍 Consultar Identificador
                 </button>
               </div>
             </div>
           </div>
 
-          <div id="equipmentDetailCard" class="panel" style="display:none;">
-            <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+          <!-- DETALLE & FICHA TÉCNICA DE HOJA DE VIDA -->
+          <div id="equipmentDetailCard" class="panel" style="display: none; margin-top: 1rem;">
+            <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
               <div>
-                <h3 id="eqName" style="font-size: 1.2rem; color: var(--text-main); font-weight: 700;"></h3>
+                <h3 id="eqName" style="font-size: 1.2rem; color: var(--text-main); font-weight: 700; margin-bottom: 0.2rem;"></h3>
                 <div style="font-size: 0.85rem; color: var(--text-muted);">
-                  SKU: <strong id="eqSku"></strong> | Serial: <strong id="eqSerial" style="color: var(--accent-green); font-family: monospace;"></strong>
+                  SKU: <strong id="eqSku"></strong> | <span id="eqIdentifierLabel">Serial:</span> <strong id="eqSerial" style="color: var(--accent-green); font-family: monospace; font-size: 0.95rem;"></strong>
                 </div>
               </div>
-              <div>
-                <span id="eqStatusBadge" class="badge badge-green">EN_STOCK</span>
+              <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <span id="eqWarrantyBadge" class="badge badge-green" style="font-size: 0.78rem; padding: 0.35rem 0.7rem;">GARANTÍA VIGENTE</span>
+                <span id="eqStatusBadge" class="badge badge-green" style="font-size: 0.78rem; padding: 0.35rem 0.7rem;">EN_STOCK</span>
+                <button class="btn btn-primary" onclick="openAddEventModal()" style="font-size: 0.8rem; padding: 0.35rem 0.8rem;">
+                  <span>📋</span> + Registrar Evento / Soporte
+                </button>
               </div>
             </div>
 
-            <div style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); display: grid; gap: 1rem; background: rgba(15, 23, 42, 0.6); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.5rem;">
+            <!-- Tarjetas de Resumen Rápido -->
+            <div style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); display: grid; gap: 1rem; background: rgba(15, 23, 42, 0.6); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.25rem;">
               <div>
-                <div style="font-size: 0.75rem; color: var(--text-muted);">Fecha de Ingreso a Bodega</div>
-                <div id="eqEntryDate" style="font-weight: 600;">-</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Fecha de Ingreso / Origen</div>
+                <div id="eqEntryDate" style="font-weight: 600; color: var(--text-main);">-</div>
               </div>
               <div>
-                <div style="font-size: 0.75rem; color: var(--text-muted);">Cliente Comprador</div>
-                <div id="eqCustomer" style="font-weight: 600;">-</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Cliente Comprador / Asignado</div>
+                <div id="eqCustomer" style="font-weight: 600; color: var(--text-main);">-</div>
               </div>
               <div>
-                <div style="font-size: 0.75rem; color: var(--text-muted);">Total Eventos / Mantenimientos</div>
-                <div id="eqMaintenanceCount" style="font-weight: 600;">0</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Factura / Soporte Asociado</div>
+                <div id="eqInvoice" style="font-weight: 600; color: var(--accent-blue);">-</div>
+              </div>
+              <div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Total Eventos Registrados</div>
+                <div id="eqMaintenanceCount" style="font-weight: 700; color: var(--accent-teal);">0</div>
               </div>
             </div>
 
-            <h4 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem;">Timeline de Eventos y Retorno a China por Garantía</h4>
+            <!-- BARRA DE FILTROS AVANZADOS DEL TIMELINE (Del más reciente al más antiguo) -->
+            <div class="panel" style="background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-color); padding: 0.85rem; margin-bottom: 1.25rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
+                <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--accent-green); margin-bottom: 0; display: flex; align-items: center; gap: 0.4rem;">
+                  🔍 Filtrar Historial & Timeline (Ordenado del más reciente al más antiguo)
+                </h4>
+                <button type="button" class="btn btn-secondary" style="padding: 0.15rem 0.55rem; font-size: 0.72rem;" onclick="resetLifecycleTimelineFilters()">
+                  🔄 Restablecer Filtros
+                </button>
+              </div>
+
+              <div class="form-row" style="margin-bottom: 0;">
+                <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0.35rem;">
+                  <label class="form-label" style="font-size: 0.72rem;" for="lfFilterUser">Filtrar por Usuario</label>
+                  <select id="lfFilterUser" class="form-control" style="font-size: 0.78rem; padding: 0.3rem 0.5rem;" onchange="renderEquipmentTimelineFiltered()">
+                    <option value="ALL">Todos los Usuarios</option>
+                  </select>
+                </div>
+
+                <div class="form-group" style="flex: 1; min-width: 130px; margin-bottom: 0.35rem;">
+                  <label class="form-label" style="font-size: 0.72rem;" for="lfFilterDateStart">Fecha Desde</label>
+                  <input type="date" id="lfFilterDateStart" class="form-control" style="font-size: 0.78rem; padding: 0.3rem 0.5rem;" onchange="renderEquipmentTimelineFiltered()">
+                </div>
+
+                <div class="form-group" style="flex: 1; min-width: 130px; margin-bottom: 0.35rem;">
+                  <label class="form-label" style="font-size: 0.72rem;" for="lfFilterDateEnd">Fecha Hasta</label>
+                  <input type="date" id="lfFilterDateEnd" class="form-control" style="font-size: 0.78rem; padding: 0.3rem 0.5rem;" onchange="renderEquipmentTimelineFiltered()">
+                </div>
+
+                <div class="form-group" style="flex: 1.2; min-width: 160px; margin-bottom: 0.35rem;">
+                  <label class="form-label" style="font-size: 0.72rem;" for="lfFilterKeyword">Buscar por Palabra / Serial / ID</label>
+                  <input type="text" id="lfFilterKeyword" class="form-control" style="font-size: 0.78rem; padding: 0.3rem 0.5rem;" placeholder="Ej. mantenimiento, china, falla..." oninput="renderEquipmentTimelineFiltered()">
+                </div>
+              </div>
+            </div>
+
+            <!-- CONTENEDOR DEL TIMELINE -->
             <div id="equipmentTimeline" class="timeline">
-              <!-- JS -->
+              <!-- JS rendered from newest to oldest -->
             </div>
           </div>
         </section>
+
+        <!-- MODAL: REGISTRAR NUEVO EVENTO / MANTENIMIENTO CON FOTOS -->
+        <div id="addEquipmentEventModal" class="modal-overlay">
+          <div class="modal-content" style="max-width: 580px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-main);">📋 Registrar Evento en Hoja de Vida</h3>
+              <button type="button" class="btn btn-secondary" onclick="closeAddEquipmentEventModal()" style="padding: 0.2rem 0.6rem;">✕</button>
+            </div>
+
+            <form id="addEquipmentEventForm" onsubmit="handleSaveEquipmentEvent(event)">
+              <div class="form-group">
+                <label class="form-label" for="eventModalType">Tipo de Evento *</label>
+                <select id="eventModalType" class="form-control" required>
+                  <option value="MANTENIMIENTO_PREVENTIVO">🔧 Mantenimiento Preventivo</option>
+                  <option value="MANTENIMIENTO_CORRECTIVO">🛠️ Mantenimiento Correctivo / Reparación</option>
+                  <option value="FALLA_REPORTADA">⚠️ Falla Reportada por Cliente</option>
+                  <option value="RETORNO_FABRICA_CHINA">✈️ Retorno a Fábrica (Garantía Internacional)</option>
+                  <option value="REVISION_TECNICA">🔍 Revisión Técnica / Calibración</option>
+                  <option value="INSTALACION_CAPACITACION">🎓 Instalación y Capacitación</option>
+                  <option value="CAMBIO_ACCESORIO">🔌 Cambio de Accesorio o Sonda</option>
+                  <option value="OTRO_EVENTO">📝 Nota / Otro Evento</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="eventModalDate">Fecha del Evento *</label>
+                <input type="date" id="eventModalDate" class="form-control" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="eventModalDescription">Descripción y Diagnóstico Técnico *</label>
+                <textarea id="eventModalDescription" class="form-control" rows="3" placeholder="Detalle la causa, pruebas realizadas, repuestos cambiados o acciones..." required></textarea>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="eventModalFiles">📎 Adjuntar Fotografías o Soportes Digitales (PDF, JPG, PNG)</label>
+                <input type="file" id="eventModalFiles" class="form-control" multiple accept="image/*, .pdf" onchange="renderEventFilesPreview(this)">
+                <div id="eventModalFilesPreview" style="margin-top: 0.35rem; display: flex; flex-wrap: wrap; gap: 0.35rem;"></div>
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeAddEquipmentEventModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">💾 Guardar Evento Inmutable</button>
+              </div>
+            </form>
+          </div>
+        </div>
 
         <!-- ========================================== -->
         <!-- VIEW 5: DIRECTORIO DE CLIENTES & ANALÍTICA 360° -->
@@ -1076,7 +1191,56 @@
           </div>
 
           <div class="panel">
-            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Reservas Activas de Inventario</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.25rem;">
+              <h3 style="font-size: 1rem; font-weight: 600; margin: 0;">Historial y Gestión de Reservas</h3>
+              <span id="reservationCountBadge" class="badge badge-purple" style="font-size: 0.8rem; font-weight: 600;">0 registros</span>
+            </div>
+
+            <!-- Filtros de Búsqueda Avanzada -->
+            <div style="background: rgba(15, 23, 42, 0.55); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1.25rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; align-items: end;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Buscar por Cliente</label>
+                <input type="text" id="resFilterCustomer" class="form-control" placeholder="Nombre o NIT/CC..." style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" oninput="renderReservations()">
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Estado</label>
+                <select id="resFilterStatus" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" onchange="renderReservations()">
+                  <option value="ALL">Todos los Estados</option>
+                  <option value="ACTIVA" selected>Solo Activas</option>
+                  <option value="LIBERADA">Solo Liberadas</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Usuario Creador</label>
+                <select id="resFilterUser" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" onchange="renderReservations()">
+                  <option value="ALL">Todos los Usuarios</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Cantidad Mínima</label>
+                <input type="number" id="resFilterMinQty" class="form-control" placeholder="Min cant..." min="0" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" oninput="renderReservations()">
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Fecha Desde</label>
+                <input type="date" id="resFilterDateStart" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" onchange="renderReservations()">
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Fecha Hasta</label>
+                <input type="date" id="resFilterDateEnd" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" onchange="renderReservations()">
+              </div>
+
+              <div style="display: flex; gap: 0.5rem;">
+                <button class="btn btn-secondary" style="width: 100%; font-size: 0.8rem; padding: 0.45rem 0.75rem;" onclick="resetReservationFilters()">
+                  🔄 Limpiar
+                </button>
+              </div>
+            </div>
+
             <div class="table-responsive">
               <table class="custom-table">
                 <thead>
@@ -1085,9 +1249,10 @@
                     <th>Cliente</th>
                     <th>Producto</th>
                     <th>Ubicación / Sede</th>
-                    <th>Cantidad Reservada</th>
+                    <th>Cantidad</th>
                     <th>Motivo / Observación</th>
-                    <th>Fecha Reserva</th>
+                    <th>Fecha y Hora</th>
+                    <th>Usuario</th>
                     <th>Estado</th>
                     <th>Acciones</th>
                   </tr>
@@ -2149,16 +2314,14 @@
         <form id="newReservationForm" onsubmit="handleCreateReservation(event)">
           <div class="form-group" style="position: relative;">
             <label class="form-label">Cliente Solicitante *</label>
-            <input type="text" id="resCustomerInput" class="form-control" list="resCustomerList" placeholder="🔍 Buscar cliente por nombre, NIT o cédula..." required autocomplete="off" oninput="filterResCustomerAutocomplete(this.value)" onfocus="filterResCustomerAutocomplete(this.value)">
-            <datalist id="resCustomerList"></datalist>
+            <input type="text" id="resCustomerInput" class="form-control" placeholder="🔍 Buscar cliente por nombre, NIT o cédula..." required autocomplete="off" oninput="filterResCustomerAutocomplete(this.value)" onfocus="filterResCustomerAutocomplete(this.value)">
             <input type="hidden" id="resCustomerSelect">
             <div id="resCustomerDropdown" class="autocomplete-dropdown-panel" style="display: none;"></div>
           </div>
 
           <div class="form-group" style="position: relative;">
             <label class="form-label">Producto a Reservar *</label>
-            <input type="text" id="resProductInput" class="form-control" list="resProductList" placeholder="🔍 Buscar producto por SKU, nombre o marca..." required autocomplete="off" oninput="filterResProductAutocomplete(this.value)" onfocus="filterResProductAutocomplete(this.value)">
-            <datalist id="resProductList"></datalist>
+            <input type="text" id="resProductInput" class="form-control" placeholder="🔍 Buscar producto por SKU, nombre o marca..." required autocomplete="off" oninput="filterResProductAutocomplete(this.value)" onfocus="filterResProductAutocomplete(this.value)">
             <input type="hidden" id="resProductSelect">
             <div id="resProductDropdown" class="autocomplete-dropdown-panel" style="display: none;"></div>
           </div>

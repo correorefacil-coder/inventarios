@@ -25,3 +25,9 @@ Thumbs.db
 # Database / SQLite local dev files
 *.sqlite
 *.sqlite-journal
+*.db
+*.db-journal
+
+# Python
+__pycache__/
+*.py[cod]
