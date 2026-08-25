@@ -310,6 +310,39 @@ def init_db():
         if not Category.query.filter_by(name=c['name']).first():
             db.session.add(Category(name=c['name'],description=c['description'],
                 color=c['color'],createdAt=now_iso()[:10]))
+
+    # Cargar clientes iniciales a SQLite si la tabla de clientes está vacía
+    if Customer.query.count() == 0:
+        cust_json_path = os.path.join(os.path.dirname(BASE_DIR), 'all_excel_customers.json')
+        if not os.path.exists(cust_json_path):
+            cust_json_path = os.path.join(BASE_DIR, 'all_excel_customers.json')
+        if os.path.exists(cust_json_path):
+            try:
+                with open(cust_json_path, 'r', encoding='utf-8') as f:
+                    raw_custs = json.load(f)
+                known = {'id','documentType','documentTypeAbbr','documentNumber','documentNum','name','phone','email','city','address','regimenIva','createdAt'}
+                for cdata in raw_custs:
+                    cid = cdata.get('id') or gen_id()
+                    doc_num = cdata.get('documentNumber') or cdata.get('documentNum') or ''
+                    extra = {k:v for k,v in cdata.items() if k not in known}
+                    db.session.add(Customer(
+                        id=cid,
+                        documentType=cdata.get('documentType', ''),
+                        documentTypeAbbr=cdata.get('documentTypeAbbr', ''),
+                        documentNum=doc_num,
+                        name=cdata.get('name', 'Sin Nombre'),
+                        phone=cdata.get('phone', ''),
+                        email=cdata.get('email', ''),
+                        city=cdata.get('city', ''),
+                        address=cdata.get('address', ''),
+                        regimenIva=cdata.get('regimenIva', ''),
+                        extraData=json.dumps(extra, ensure_ascii=False),
+                        createdAt=cdata.get('createdAt', now_iso()[:10])
+                    ))
+                print(f"[*] Se migraron {len(raw_custs)} clientes a la BD SQLite.")
+            except Exception as ce:
+                print(f"[WARN] Error al sembrar clientes en BD SQLite: {ce}")
+
     db.session.commit()
     print(f"BD SQLite lista: {DB_PATH}")
 
@@ -572,5 +605,5 @@ def serve_static(path):
 
 if __name__ == '__main__':
     with app.app_context(): init_db()
-    print('[OK] Servidor Mas Campo API listo en: http://localhost:5000')
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    print('[OK] Servidor Mas Campo API listo en: http://localhost:8080')
+    app.run(host='0.0.0.0', port=8080, debug=False)
