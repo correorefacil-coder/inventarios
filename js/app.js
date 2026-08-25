@@ -103757,7 +103757,7 @@ const systemUsers = [
     vinculacion: "Gerente General",
     address: "Sede Principal Más Campo",
     phone: "3102607947",
-    password: "$MAS_CAMPO_SECURE_SALT_2026$1b7e61bc89a7442157a46fa48fce8da87c1be272c7247734a3efd28cbb0bba13",
+    password: "$MAS_CAMPO_SECURE_SALT_2026$53f058f7ad60fab4420aee174d53c2b7377a963d3e14fbd4395d7042f29602fe",
     mustChangePassword: false,
     active: true
   },
@@ -103771,7 +103771,7 @@ const systemUsers = [
     vinculacion: "Planta (Nómina)",
     address: "Km 4 Vía Acacías",
     phone: "3187779900",
-    password: "$MAS_CAMPO_SECURE_SALT_2026$1b7e61bc89a7442157a46fa48fce8da87c1be272c7247734a3efd28cbb0bba13",
+    password: "$MAS_CAMPO_SECURE_SALT_2026$53f058f7ad60fab4420aee174d53c2b7377a963d3e14fbd4395d7042f29602fe",
     mustChangePassword: false,
     active: true
   },
@@ -103785,7 +103785,7 @@ const systemUsers = [
     vinculacion: "Planta (Nómina)",
     address: "Cra 15 # 93-40, Bogotá",
     phone: "3153339876",
-    password: "$MAS_CAMPO_SECURE_SALT_2026$1b7e61bc89a7442157a46fa48fce8da87c1be272c7247734a3efd28cbb0bba13",
+    password: "$MAS_CAMPO_SECURE_SALT_2026$53f058f7ad60fab4420aee174d53c2b7377a963d3e14fbd4395d7042f29602fe",
     mustChangePassword: false,
     active: true
   }
