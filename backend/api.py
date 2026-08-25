@@ -240,7 +240,7 @@ INITIAL_USERS = [
     {'id':'usr-super','firstName':'Superusuario','lastName':'Gerencia','email':'gerencia@softproductiva.com',
      'role':'SUPERADMINISTRADOR','vinculacion':'Planta (Nomina)','address':'Sede Principal SoftProductiva',
      'phone':'+573000000000','document':'0000000000',
-     'password':SALT+'1b7e61bc89a7442157a46fa48fce8da87c1be272c7247734a3efd28cbb0bba13',
+     'password':SALT+'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
      'active':True,'isSuperuser':True,'mustChangePassword':False},
     {'id':'usr-leyla','firstName':'Leyla Caterine','lastName':'Bernal','email':'mascampo@gmail.com',
      'role':'ADMINISTRADOR','vinculacion':'Gerente General','address':'Sede Principal Mas Campo',

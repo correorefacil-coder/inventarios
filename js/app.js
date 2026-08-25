@@ -103743,7 +103743,7 @@ const systemUsers = [
     vinculacion: "Planta (Nómina)",
     address: "Sede Principal SoftProductiva S.A.S",
     phone: "+573000000000",
-    password: "$MAS_CAMPO_SECURE_SALT_2026$1b7e61bc89a7442157a46fa48fce8da87c1be272c7247734a3efd28cbb0bba13",
+    password: "$MAS_CAMPO_SECURE_SALT_2026$e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     mustChangePassword: false,
     active: true
   },
