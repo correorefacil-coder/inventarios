@@ -757,6 +757,13 @@
                   <input type="text" id="movInvoice" class="form-control" placeholder="Ej. 13837/ 7691">
                 </div>
 
+                <div class="form-group">
+                  <label class="form-label" for="movLocation">Ubicación / Sede * (Obligatoria)</label>
+                  <select id="movLocation" class="form-control" required>
+                    <!-- JS populated locations -->
+                  </select>
+                </div>
+
                 <div class="form-group" style="position: relative;">
                   <label class="form-label" for="movCustomerSearchInput">Cliente / Proveedor Asociado (Autocompletar)</label>
                   <div class="product-autocomplete-container">
@@ -802,6 +809,7 @@
                     <th>Fecha</th>
                     <th>Tipo</th>
                     <th>Producto</th>
+                    <th>Ubicación / Sede</th>
                     <th>Cantidad</th>
                     <th>Factura N°</th>
                     <th>Cliente / Proveedor</th>

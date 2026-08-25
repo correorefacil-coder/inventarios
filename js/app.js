@@ -105292,6 +105292,13 @@ function populateDropdowns() {
     if (curVal) trFilterToLocSelect.value = curVal;
   }
 
+  const movLocationSelect = document.getElementById("movLocation");
+  if (movLocationSelect) {
+    const curMovLoc = movLocationSelect.value;
+    movLocationSelect.innerHTML = activeLocationOptions;
+    if (curMovLoc) movLocationSelect.value = curMovLoc;
+  }
+
   const movProductSelect = document.getElementById("movProduct");
   const forecastProductSelect = document.getElementById("forecastProductSelect");
   const resProductSelect = document.getElementById("resProductSelect");
@@ -108410,12 +108417,19 @@ function handleCreateMovement(e) {
   const prodId = document.getElementById("movProduct").value;
   const qty = parseInt(document.getElementById("movQuantity").value);
   const invoice = document.getElementById("movInvoice").value;
+  const locationId = document.getElementById("movLocation") ? document.getElementById("movLocation").value : "loc-1";
   const customerId = document.getElementById("movCustomer").value;
   const serialNumber = document.getElementById("movSerial")?.value;
   const notes = document.getElementById("movNotes").value;
 
+  if (!locationId) {
+    alert("⚠️ UBICACIÓN OBLIGATORIA: Debe seleccionar obligatoriamente una ubicación / sede para registrar el movimiento.");
+    return;
+  }
+
   const product = appState.products.find(p => p.id === prodId);
   const customer = appState.customers.find(c => c.id === customerId);
+  const location = appState.locations.find(l => l.id === locationId);
 
   if (!product) {
     alert("⚠️ Por favor seleccione un producto válido.");
@@ -108424,25 +108438,32 @@ function handleCreateMovement(e) {
 
   const attachments = [...pendingMovementAttachments];
 
+  ensureProductLocations();
+  if (!product.stockByLocation) product.stockByLocation = {};
+  const currentLocStock = product.stockByLocation[locationId] || 0;
+
   if (type === 'SALIDA_VENTA') {
     const available = product.physicalStock - product.reservedStock;
     if (qty > available) {
-      alert(`⚠️ ERROR DE STOCK: El producto ${product.sku} solo tiene ${available} unidades disponibles (${product.physicalStock} físicas - ${product.reservedStock} reservadas).`);
+      alert(`⚠️ ERROR DE STOCK: El producto ${product.sku} solo tiene ${available} unidades disponibles en total (${product.physicalStock} físicas - ${product.reservedStock} reservadas).`);
+      return;
+    }
+    if (qty > currentLocStock) {
+      alert(`⚠️ ERROR DE STOCK EN SEDE: En '${location ? location.name : locationId}' solo hay ${currentLocStock} unidades disponibles.`);
       return;
     }
   }
 
   if (type === 'AJUSTE_QUITAR') {
-    const currentStock = product.physicalStock || 0;
-    if (qty > currentStock) {
-      alert(`⚠️ ERROR DE AJUSTE: No puede quitar ${qty} unidades. El producto ${product.sku} actualmente solo tiene ${currentStock} unidades en inventario físico.`);
+    if (qty > currentLocStock) {
+      alert(`⚠️ ERROR DE AJUSTE: No puede quitar ${qty} unidades de '${location ? location.name : locationId}', donde solo hay ${currentLocStock} unidades.`);
       return;
     }
   }
 
   if (type === 'INGRESO_COMPRA' && appState.currentUser.role === 'LOGISTICA') {
-    const targetLocId = "loc-1";
-    const targetLoc = appState.locations ? appState.locations.find(l => l.id === targetLocId) : null;
+    const targetLocId = locationId;
+    const targetLoc = location;
     let parsedSerials = [];
     if (product.requiresSerial && serialNumber) {
       parsedSerials = serialNumber.split(',').map(s => s.trim()).filter(Boolean);
@@ -108473,7 +108494,7 @@ function handleCreateMovement(e) {
 
     addActivityLog("CREACION", "PendingInventoryIntake", `Ingreso de ${qty} unidades de '${product.sku}' enviado a cola de validación por usuario Logística.`);
 
-    alert(`⏳ INGRESO REGISTRADO EN BORRADOR: Su solicitud de ingreso de ${qty} unidades de '${product.sku}' ha quedado PENDIENTE DE VALIDACIÓN por un Administrador.\n\nNo ingresará al inventario físico ni al Kardex hasta que un Administrador la revise y la apruebe.`);
+    alert(`⏳ INGRESO REGISTRADO EN BORRADOR: Su solicitud de ingreso de ${qty} unidades de '${product.sku}' en '${targetLoc ? targetLoc.name : targetLocId}' ha quedado PENDIENTE DE VALIDACIÓN por un Administrador.\n\nNo ingresará al inventario físico ni al Kardex hasta que un Administrador la revise y la apruebe.`);
     
     pendingMovementAttachments = [];
     renderMovementFilesPreview();
@@ -108482,28 +108503,26 @@ function handleCreateMovement(e) {
     return;
   }
 
-  ensureProductLocations();
-  if (!product.stockByLocation) product.stockByLocation = {};
-
   if (type === 'INGRESO_COMPRA' || type === 'ENTRADA' || type === 'AJUSTE_AGREGAR') {
     product.physicalStock = (product.physicalStock || 0) + qty;
-    product.stockByLocation["loc-1"] = (product.stockByLocation["loc-1"] || 0) + qty;
+    product.stockByLocation[locationId] = (product.stockByLocation[locationId] || 0) + qty;
   } else if (type === 'SALIDA_VENTA' || type === 'GARANTIA_REEMPLAZO' || type === 'SALIDA' || type === 'AJUSTE_QUITAR') {
     product.physicalStock = Math.max(0, (product.physicalStock || 0) - qty);
-    product.stockByLocation["loc-1"] = Math.max(0, (product.stockByLocation["loc-1"] || 0) - qty);
+    product.stockByLocation[locationId] = Math.max(0, (product.stockByLocation[locationId] || 0) - qty);
   } else if (type === 'AJUSTE') {
     product.physicalStock = Math.max(0, (product.physicalStock || 0) + qty);
-    product.stockByLocation["loc-1"] = Math.max(0, (product.stockByLocation["loc-1"] || 0) + qty);
+    product.stockByLocation[locationId] = Math.max(0, (product.stockByLocation[locationId] || 0) + qty);
   }
 
   const newMov = {
     id: `mov-${Date.now()}`,
-    date: new Date().toISOString().substring(0, 10),
+    date: new Date().toISOString(),
     type,
     productId: prodId,
     quantity: qty,
+    locationId: locationId,
     invoiceNumber: invoice || null,
-    customerName: customer ? customer.name : (type === 'SALIDA_VENTA' ? 'Venta General' : null),
+    customerName: customer ? customer.name : (type === 'SALIDA_VENTA' ? 'Venta General' : (location ? location.name : null)),
     user: appState.currentUser ? appState.currentUser.name : 'Usuario',
     notes,
     attachments
@@ -108519,6 +108538,7 @@ function handleCreateMovement(e) {
         productId: prodId,
         serialNumber: serialNumber,
         status: "EN_STOCK",
+        currentLocationId: locationId,
         currentCustomerId: null,
         entryDate: new Date().toISOString().substring(0, 10),
         saleDate: null,
@@ -108566,7 +108586,8 @@ function renderKardex() {
   const tableBody = document.getElementById("kardexTableBody");
   tableBody.innerHTML = appState.movements.map(m => {
     const prod = appState.products.find(p => p.id === m.productId);
-    const atts = m.attachments || [];
+    const locObj = appState.locations ? appState.locations.find(l => l.id === m.locationId) : null;
+    const locName = locObj ? locObj.name : (m.locationId || 'Central');
     return `
       <tr>
         <td><strong>${m.date}</strong></td>
@@ -108586,6 +108607,7 @@ function renderKardex() {
           </span>
         </td>
         <td><strong>${prod ? prod.sku : ''}</strong> - ${prod ? prod.name : ''}</td>
+        <td><span class="badge badge-purple" style="font-size: 0.75rem;">📍 ${locName}</span></td>
         <td><strong>${m.quantity}</strong></td>
         <td>${m.invoiceNumber || '-'}</td>
         <td>${m.customerName || '-'}</td>
