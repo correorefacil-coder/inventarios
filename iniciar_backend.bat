@@ -7,7 +7,7 @@ echo   MAS CAMPO - SERVIDOR API REST + BASE DE DATOS
 echo  ================================================
 echo.
 echo  Base de datos: backend\mascampo.db
-echo  API:           http://localhost:5000
+echo  API:           http://localhost:8080
 echo.
 echo  Iniciando servidor...
 echo  (No cierre esta ventana mientras usa el sistema)
