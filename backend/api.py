@@ -88,7 +88,7 @@ class Product(db.Model):
                 'brand':self.brand or '','requiresSerial':self.requiresSerial,
                 'unitOfMeasure':self.unitOfMeasure or 'Unidad','minStockAlert':self.minStockAlert,
                 'baseCost':self.baseCost,'salePrice':self.salePrice,'physicalStock':self.physicalStock,
-                'reservedStock':self.reservedStock,'locationStock':loc,
+                'reservedStock':self.reservedStock,'locationStock':loc,'stockByLocation':loc,
                 'createdAt':self.createdAt or '','updatedAt':self.updatedAt or ''}
 
 class Movement(db.Model):
@@ -334,7 +334,8 @@ def save_products():
     if not isinstance(data,list): return jsonify({'error':'Lista esperada'}),400
     for pdata in data:
         pid=pdata.get('id') or gen_id()
-        loc_str=json.dumps(pdata.get('locationStock',{}))
+        loc_data = pdata.get('stockByLocation') or pdata.get('locationStock') or {}
+        loc_str=json.dumps(loc_data)
         p=Product.query.get(pid)
         if p:
             p.sku=pdata.get('sku',p.sku); p.barcode=pdata.get('barcode',p.barcode)

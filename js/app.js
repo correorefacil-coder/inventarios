@@ -109869,6 +109869,13 @@ async function loadAllFromAPI(shouldRenderAll = true) {
       localStorage.setItem("mascampo_users_db", JSON.stringify(users));
     }
     if (Array.isArray(products) && products.length > 0) {
+      products.forEach(p => {
+        if (!p.stockByLocation && p.locationStock) {
+          p.stockByLocation = p.locationStock;
+        } else if (p.stockByLocation && !p.locationStock) {
+          p.locationStock = p.stockByLocation;
+        }
+      });
       appState.products = products;
       localStorage.setItem("mascampo_products_db", JSON.stringify(products));
     }
