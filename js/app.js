@@ -105035,7 +105035,7 @@ function initRoleSwitcher() {
 
 const ROLE_PERMISSIONS = {
   ADMINISTRADOR: {
-    views: ['view-dashboard', 'view-catalog', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-users', 'view-audit-logs', 'view-forecasting', 'view-reports'],
+    views: ['view-dashboard', 'view-catalog', 'view-edit-product', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-users', 'view-audit-logs', 'view-forecasting', 'view-reports'],
     canEditCatalog: true,
     canEditCustomers: true,
     canApprovePendingIntakes: true,
@@ -105046,7 +105046,7 @@ const ROLE_PERMISSIONS = {
     canExportReports: true
   },
   SUPERADMINISTRADOR: {
-    views: ['view-dashboard', 'view-catalog', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-users', 'view-audit-logs', 'view-forecasting', 'view-reports'],
+    views: ['view-dashboard', 'view-catalog', 'view-edit-product', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-users', 'view-audit-logs', 'view-forecasting', 'view-reports'],
     canEditCatalog: true,
     canEditCustomers: true,
     canApprovePendingIntakes: true,
@@ -109473,9 +109473,10 @@ function handleCreateProduct(e) {
   };
 
   appState.products.push(newProd);
+  saveProductsToDisk();
   addActivityLog("CREACION", "ProductManagement", `Creación de producto nuevo en catálogo '${sku} - ${name}' (Barcode: ${barcode || 'N/A'})`);
 
-  alert(`✅ Producto ${sku} creado.`);
+  alert(`✅ Producto ${sku} creado exitosamente.`);
   closeProductModal();
   populateDropdowns();
   renderAllViews();
@@ -109760,6 +109761,9 @@ function handleUpdateProduct(e) {
         }
       }
     });
+  saveProductsToDisk();
+  if (requiresSerial) {
+    saveSerializedItemsToDisk();
   }
 
   // Record audit log entry
