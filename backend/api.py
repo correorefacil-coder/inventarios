@@ -480,7 +480,21 @@ def save_audit_logs():
     db.session.commit()
     return jsonify({'ok':True})
 
+from flask import send_from_directory
+
+@app.route('/')
+def serve_index():
+    project_root = os.path.dirname(BASE_DIR)
+    return send_from_directory(project_root, 'index.html')
+
+@app.route('/<path:path>')
+def serve_static(path):
+    project_root = os.path.dirname(BASE_DIR)
+    if os.path.exists(os.path.join(project_root, path)):
+        return send_from_directory(project_root, path)
+    return jsonify({'error': 'Not found'}), 404
+
 if __name__ == '__main__':
     with app.app_context(): init_db()
-    print('Servidor Mas Campo API en http://localhost:5000')
+    print('✅ Servidor Mas Campo listo en: http://localhost:5000')
     app.run(host='0.0.0.0', port=5000, debug=False)
