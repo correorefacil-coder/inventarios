@@ -106220,7 +106220,7 @@ async function handleSaveUser(e) {
         appState.currentUser.name = user.name;
       }
 
-      saveUsersToDisk();
+      await saveUsersToDisk();
       addActivityLog("MODIFICACION", "UserManagement", `Actualización de datos de usuario '${user.email}' (Vinculación: ${vinculacion}, Rol: ${role})`);
       alert(`✅ Usuario '${user.email}' actualizado con éxito.`);
     }
@@ -106259,7 +106259,7 @@ async function handleSaveUser(e) {
     };
 
     appState.users.push(newUser);
-    saveUsersToDisk();
+    await saveUsersToDisk();
     addActivityLog("CREACION", "UserManagement", `Creación de nuevo usuario '${email}' (Vinculación: ${vinculacion}, Rol: ${role})`);
     alert(`✅ Usuario '${email}' creado exitosamente.`);
   }

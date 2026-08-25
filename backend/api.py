@@ -406,29 +406,47 @@ def save_users():
     if not isinstance(data,list): return jsonify({'error':'Lista esperada'}),400
     for udata in data:
         uid=udata.get('id') or gen_id()
-        user=User.query.get(uid)
+        email=(udata.get('email') or '').strip().lower()
+        # Buscar por ID o por Email para evitar violaciones de unicidad en SQLite
+        user = User.query.get(uid) or (User.query.filter_by(email=email).first() if email else None)
+        
+        fName = udata.get('firstName') or ''
+        lName = udata.get('lastName') or ''
+        if not fName and udata.get('name'):
+            parts = str(udata.get('name')).strip().split(' ', 1)
+            fName = parts[0]
+            lName = parts[1] if len(parts) > 1 else ''
+
         if user:
-            user.firstName=udata.get('firstName',user.firstName)
-            user.lastName=udata.get('lastName',user.lastName)
-            user.email=udata.get('email',user.email)
-            user.role=udata.get('role',user.role)
-            user.phone=udata.get('phone',user.phone)
-            user.address=udata.get('address',user.address)
-            user.vinculacion=udata.get('vinculacion',user.vinculacion)
-            user.document=udata.get('document',user.document)
-            user.active=udata.get('active',user.active)
-            user.mustChangePassword=udata.get('mustChangePassword',user.mustChangePassword)
-            if udata.get('password') and udata['password']!=user.password: user.password=udata['password']
+            if fName: user.firstName = fName
+            if lName: user.lastName = lName
+            if email: user.email = email
+            if udata.get('role'): user.role = udata.get('role')
+            user.phone = udata.get('phone', user.phone)
+            user.address = udata.get('address', user.address)
+            user.vinculacion = udata.get('vinculacion', user.vinculacion)
+            user.document = udata.get('document', user.document)
+            if 'active' in udata: user.active = bool(udata.get('active'))
+            if 'mustChangePassword' in udata: user.mustChangePassword = bool(udata.get('mustChangePassword'))
+            if udata.get('password') and udata['password'] != user.password:
+                user.password = udata['password']
         else:
-            db.session.add(User(id=uid,firstName=udata.get('firstName',''),
-                lastName=udata.get('lastName',''),email=udata.get('email',''),
-                password=udata.get('password',''),role=udata.get('role','LOGISTICA'),
-                phone=udata.get('phone',''),address=udata.get('address',''),
+            db.session.add(User(
+                id=uid,
+                firstName=fName or 'Usuario',
+                lastName=lName or '',
+                email=email,
+                password=udata.get('password',''),
+                role=udata.get('role','LOGISTICA'),
+                phone=udata.get('phone',''),
+                address=udata.get('address',''),
                 vinculacion=udata.get('vinculacion','Planta (Nomina)'),
-                document=udata.get('document',''),active=udata.get('active',True),
-                isSuperuser=udata.get('isSuperuser',False),
-                mustChangePassword=udata.get('mustChangePassword',False),
-                createdAt=udata.get('createdAt',now_iso()[:10])))
+                document=udata.get('document',''),
+                active=bool(udata.get('active', True)),
+                isSuperuser=bool(udata.get('isSuperuser', False)),
+                mustChangePassword=bool(udata.get('mustChangePassword', False)),
+                createdAt=udata.get('createdAt', now_iso()[:10])
+            ))
     db.session.commit()
     return jsonify({'ok':True,'count':len(data)})
 
