@@ -103707,24 +103707,22 @@ async function hashPassword(plainTextPassword) {
 
 async function verifyPassword(plainPasswordInput, storedHash) {
   if (!plainPasswordInput) return false;
+  if (!storedHash) return false;
   const trimmedInput = String(plainPasswordInput).trim();
-  if (trimmedInput === "CARE90po" || 
-      trimmedInput === "M4sC4mpo#2026" || 
-      trimmedInput === "admin" || 
-      trimmedInput === "123456" || 
-      (storedHash && trimmedInput === String(storedHash).trim())) {
-    return true;
+  const trimmedHash = String(storedHash).trim();
+
+  // If hash has the security salt prefix, compute hash of input and compare strictly
+  if (trimmedHash.startsWith("$MAS_CAMPO_SECURE_SALT_2026$")) {
+    try {
+      const computedHash = await hashPassword(trimmedInput);
+      return computedHash === trimmedHash;
+    } catch (e) {
+      return false;
+    }
   }
-  if (!storedHash) return true;
-  if (!storedHash.startsWith("$MAS_CAMPO_SECURE_SALT_2026$")) {
-    return trimmedInput === storedHash;
-  }
-  try {
-    const computedHash = await hashPassword(trimmedInput);
-    return computedHash === storedHash;
-  } catch (e) {
-    return true;
-  }
+
+  // Legacy fallback if password was stored in plain text or legacy format
+  return trimmedInput === trimmedHash;
 }
 
 function validatePasswordPolicy(password) {
@@ -104685,9 +104683,9 @@ async function handleLoginSubmit(event) {
       ? appState.users 
       : systemUsers;
 
-    let matchingUser = null;
-    for (const u of usersList) {
-      if (!u) continue;
+    // 1. Buscar primero el usuario por coincidencia exacta de correo, usuario, id o nombre
+    const targetUser = usersList.find(u => {
+      if (!u) return false;
       const uEmail = (u.email || "").toLowerCase();
       const uId = (u.id || "").toLowerCase();
       const uFirstName = (u.firstName || "").toLowerCase();
@@ -104695,32 +104693,33 @@ async function handleLoginSubmit(event) {
       const uFullName = `${uFirstName} ${uLastName}`.trim();
       const uUsername = (u.username || "").toLowerCase();
 
-      const isUserMatch = 
-        uEmail === userInput ||
-        uUsername === userInput ||
-        uId === userInput ||
-        uFirstName === userInput ||
-        uLastName === userInput ||
-        uFullName === userInput ||
-        ((userInput === "mascampo@gmail.com" || userInput === "mascmpo@gmail.com" || userInput === "leyla" || userInput.includes("mascampo")) && (uEmail === "mascmpo@gmail.com" || uEmail === "mascampo@gmail.com" || uId === "usr-leyla")) ||
-        ((userInput === "superusuario" || userInput === "gerencia@softproductiva.com" || userInput.includes("gerencia") || userInput.includes("softproductiva") || userInput.includes("super")) && (uEmail === "gerencia@softproductiva.com" || uId === "usr-super"));
+      return uEmail === userInput ||
+             uUsername === userInput ||
+             uId === userInput ||
+             uFullName === userInput ||
+             (uFirstName && uFirstName === userInput) ||
+             (userInput === "superusuario" && (uEmail === "gerencia@softproductiva.com" || uId === "usr-super"));
+    });
 
-      if (isUserMatch) {
-        const isValid = await verifyPassword(passwordInput, u.password);
-        if (isValid) {
-          matchingUser = u;
-          break;
-        }
-      }
-    }
-
-    if (!matchingUser) {
+    if (!targetUser) {
       if (errorMsgBox) {
-        errorMsgBox.textContent = "⚠️ Credenciales inválidas. Verifique el usuario/correo y la contraseña.";
+        errorMsgBox.textContent = "⚠️ Usuario no encontrado. Verifique el correo o nombre de usuario ingresado.";
         errorMsgBox.style.display = "block";
       }
       return;
     }
+
+    // 2. Validar estricta y únicamente contra la contraseña almacenada de ese usuario
+    const isValid = await verifyPassword(passwordInput, targetUser.password);
+    if (!isValid) {
+      if (errorMsgBox) {
+        errorMsgBox.textContent = "⚠️ Contraseña incorrecta. Por favor verifique su clave actual.";
+        errorMsgBox.style.display = "block";
+      }
+      return;
+    }
+
+    const matchingUser = targetUser;
 
     if (!matchingUser.active) {
       if (errorMsgBox) {
@@ -106311,6 +106310,7 @@ async function handleUpdateProfile(e) {
   if (userObj) {
     if (newPassword && newPassword.trim() !== "") {
       userObj.password = await hashPassword(newPassword.trim());
+      userObj.mustChangePassword = false;
     }
     userObj.phone = newPhone;
     userObj.address = newAddress;
@@ -106318,6 +106318,8 @@ async function handleUpdateProfile(e) {
 
   appState.currentUser.phone = newPhone;
   appState.currentUser.address = newAddress;
+
+  saveUsersToDisk();
 
   addActivityLog("MODIFICACION", "UserProfileSelfService", `Usuario '${currentEmail}' actualizó sus datos personales (Teléfono/Dirección/Contraseña).`);
   alert("✅ ¡Tus datos de perfil han sido actualizados con éxito!");
