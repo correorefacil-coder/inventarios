@@ -104877,6 +104877,41 @@ document.addEventListener("DOMContentLoaded", async () => {
       suggBox.classList.remove("active");
     }
   });
+
+  // Auto-sincronización en tiempo real al volver a enfocar la pestaña o ventana
+  window.addEventListener("focus", async () => {
+    try {
+      await loadAllFromAPI(true);
+    } catch (e) {}
+  });
+
+  document.addEventListener("visibilitychange", async () => {
+    if (document.visibilityState === "visible") {
+      try {
+        await loadAllFromAPI(true);
+      } catch (e) {}
+    }
+  });
+
+  // Intervalo de sondeo suave de fondo cada 15 segundos para mantener todos los PCs sincronizados
+  setInterval(async () => {
+    if (document.visibilityState === "visible") {
+      try {
+        await loadAllFromAPI(false);
+        const activeNav = document.querySelector(".view-section.active");
+        if (activeNav) {
+          const currentViewId = activeNav.id;
+          if (currentViewId === 'view-dashboard') renderDashboard();
+          else if (currentViewId === 'view-catalog') renderCatalog();
+          else if (currentViewId === 'view-kardex') renderKardex();
+          else if (currentViewId === 'view-pending-validations') renderPendingValidationsView();
+          else if (currentViewId === 'view-users') renderUsers();
+          else if (currentViewId === 'view-reservations') renderReservations();
+          else if (currentViewId === 'view-customers-analytics') { renderCustomers(); renderCustomer360Analytics(); }
+        }
+      } catch (e) {}
+    }
+  }, 15000);
 });
 
 function renderAllViews() {
@@ -105136,7 +105171,7 @@ function initNavigation() {
   });
 }
 
-function switchView(viewId) {
+async function switchView(viewId) {
   const perms = getRolePermissions(appState.currentUser);
   if (!perms.views.includes(viewId)) {
     alert("🔒 Acceso Restringido: Su rol actual no tiene permisos para acceder a esta sección.");
@@ -105151,6 +105186,16 @@ function switchView(viewId) {
   if (activeSec) activeSec.classList.add("active");
 
   document.querySelectorAll(`[data-view="${viewId}"]`).forEach(lnk => lnk.classList.add("active"));
+
+  // Sincronización transparente e inmediata con la Base de Datos SQLite remota
+  // para reflejar al instante cambios hechos por otros usuarios o pestañas
+  try {
+    if (await checkBackendOnline()) {
+      await loadAllFromAPI(false); // false = no re-renderizar todo, sólo refrescar datos
+    }
+  } catch (e) {
+    console.warn("Recarga automática de vista:", e);
+  }
 
   if (viewId === 'view-dashboard') {
     renderDashboard();
@@ -109242,8 +109287,8 @@ async function _apiPost(endpoint, payload) {
 }
 
 // ── CARGA INICIAL DESDE API ─────────────────────────────────
-// Llamada principal en DOMContentLoaded — carga todo desde la BD real
-async function loadAllFromAPI() {
+// Carga datos desde la BD real SQLite (con soporte para auto-recarga al navegar)
+async function loadAllFromAPI(shouldRenderAll = true) {
   const online = await checkBackendOnline();
   if (!online) return; // sin backend, ya se cargó desde localStorage abajo
 
@@ -109287,8 +109332,9 @@ async function loadAllFromAPI() {
       appState.categories = categories;
     }
 
-    console.info(`✅ Datos cargados desde BD SQLite: ${products.length} productos, ${movements.length} movimientos, ${users.length} usuarios, ${customers.length} clientes`);
-    renderAllViews();
+    if (shouldRenderAll) {
+      renderAllViews();
+    }
   } catch (err) {
     console.error('Error cargando datos desde API:', err);
   }
