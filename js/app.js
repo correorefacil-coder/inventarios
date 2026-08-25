@@ -105299,6 +105299,13 @@ function populateDropdowns() {
     if (curMovLoc) movLocationSelect.value = curMovLoc;
   }
 
+  const resLocationSelect = document.getElementById("resLocationSelect");
+  if (resLocationSelect) {
+    const curResLoc = resLocationSelect.value;
+    resLocationSelect.innerHTML = activeLocationOptions;
+    if (curResLoc) resLocationSelect.value = curResLoc;
+  }
+
   const movProductSelect = document.getElementById("movProduct");
   const forecastProductSelect = document.getElementById("forecastProductSelect");
   const resProductSelect = document.getElementById("resProductSelect");
@@ -108732,21 +108739,24 @@ function renderReservations() {
   const tableBody = document.getElementById("reservationsTableBody");
   if (!tableBody) return;
   if (!appState.reservations || appState.reservations.length === 0) {
-    tableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-muted);">No hay reservas ni bloqueos de stock activos.</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">No hay reservas ni bloqueos de stock activos.</td></tr>`;
     return;
   }
   tableBody.innerHTML = appState.reservations.map(r => {
     const prod = appState.products.find(p => p.id === r.productId || p.sku === r.productId);
-    const cust = appState.customers.find(c => c.id === r.customerId || c.documentNumber === r.customerId);
+    const cust = appState.customers.find(c => c.id === r.customerId || (c.documentNumber && c.documentNumber === r.customerId));
+    const locObj = appState.locations ? appState.locations.find(l => l.id === r.locationId) : null;
+    const locName = locObj ? locObj.name : (r.locationId || 'Sede Principal');
 
     return `
       <tr>
         <td><strong>${r.id}</strong></td>
         <td>${cust ? cust.name : (r.customerName || 'Cliente')}</td>
         <td>${prod ? `<strong>${prod.sku}</strong> - ${prod.name}` : (r.productSku || 'Producto')}</td>
+        <td><span class="badge badge-purple" style="font-size: 0.75rem;">📍 ${locName}</span></td>
         <td><strong style="color: var(--accent-amber);">${r.quantity}</strong></td>
         <td>${r.reason}</td>
-        <td>${r.date}</td>
+        <td>${r.date || r.reservationDate || '-'}</td>
         <td><span class="badge badge-amber">${r.status || 'ACTIVA'}</span></td>
         <td>
           <button class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" onclick="cancelReservation('${r.id}')">
@@ -108758,19 +108768,47 @@ function renderReservations() {
   }).join('');
 }
 
+function updateResAvailableStockInfo() {
+  const prodId = document.getElementById("resProductSelect")?.value;
+  const locId = document.getElementById("resLocationSelect")?.value;
+  const helpEl = document.getElementById("resStockLocHelp");
+  if (!helpEl) return;
+
+  if (!prodId) {
+    helpEl.textContent = "";
+    return;
+  }
+
+  const prod = appState.products.find(p => p.id === prodId);
+  if (!prod) {
+    helpEl.textContent = "";
+    return;
+  }
+
+  ensureProductLocations();
+  const locStock = (prod.stockByLocation && prod.stockByLocation[locId] !== undefined) ? prod.stockByLocation[locId] : 0;
+  const totalAvailable = Math.max(0, (prod.physicalStock || 0) - (prod.reservedStock || 0));
+  const locObj = appState.locations ? appState.locations.find(l => l.id === locId) : null;
+  const locName = locObj ? locObj.name : locId;
+
+  helpEl.innerHTML = `📦 En <strong>${locName}</strong> hay <strong>${locStock}</strong> unidades físicas en stock (Stock Disponible total empresa: <strong>${totalAvailable}</strong> unid.)`;
+}
+
 function handleCreateReservation(e) {
   e.preventDefault();
   let customerId = document.getElementById("resCustomerSelect") ? document.getElementById("resCustomerSelect").value : "";
   let productId = document.getElementById("resProductSelect") ? document.getElementById("resProductSelect").value : "";
+  const locationId = document.getElementById("resLocationSelect") ? document.getElementById("resLocationSelect").value : "";
 
   const custInputVal = (document.getElementById("resCustomerInput")?.value || "").trim().toLowerCase();
   const prodInputVal = (document.getElementById("resProductInput")?.value || "").trim().toLowerCase();
 
   if (!customerId && custInputVal) {
     const match = appState.customers.find(c => {
-      const docLabel = c.documentType === "NIT" ? `nit ${c.documentNumber}` : `cc ${c.documentNumber}`;
+      const docLabel = (c.documentType === "NIT" || c.documentTypeAbbr === "NIT") ? `nit ${c.documentNumber || c.documentNum}` : `cc ${c.documentNumber || c.documentNum}`;
       const text = `${c.name} (${docLabel})`.toLowerCase();
-      return text.includes(custInputVal) || c.name.toLowerCase().includes(custInputVal) || (c.documentNumber && c.documentNumber.includes(custInputVal));
+      const docNum = (c.documentNumber || c.documentNum || '').toString().toLowerCase();
+      return text.includes(custInputVal) || c.name.toLowerCase().includes(custInputVal) || (docNum && custInputVal.includes(docNum)) || (docNum && docNum.includes(custInputVal));
     });
     if (match) customerId = match.id;
   }
@@ -108793,6 +108831,11 @@ function handleCreateReservation(e) {
     return;
   }
 
+  if (!locationId) {
+    alert("⚠️ Por favor seleccione la ubicación / sede de la cual se va a reservar el stock.");
+    return;
+  }
+
   const quantity = parseInt(document.getElementById("resQuantity").value) || 1;
   const reason = (document.getElementById("resReason")?.value || "").trim();
 
@@ -108807,11 +108850,20 @@ function handleCreateReservation(e) {
     return;
   }
 
+  ensureProductLocations();
+  const locStock = (product.stockByLocation && product.stockByLocation[locationId] !== undefined) ? product.stockByLocation[locationId] : 0;
   const availableStock = (product.physicalStock || 0) - (product.reservedStock || 0);
+  const locObj = appState.locations ? appState.locations.find(l => l.id === locationId) : null;
+  const locName = locObj ? locObj.name : locationId;
 
   if (quantity > availableStock) {
-    alert(`⚠️ STOCK INSUFICIENTE: Stock Disponible actual: ${availableStock} unidades.`);
+    alert(`⚠️ STOCK INSUFICIENTE TOTAL: El stock disponible de '${product.sku}' es de ${availableStock} unidades.`);
     return;
+  }
+
+  if (quantity > locStock) {
+    const confirmProceed = confirm(`⚠️ AVISO DE SEDE: En '${locName}' hay ${locStock} unidades físicas en stock (menor a las ${quantity} a reservar).\n\nEl stock disponible global de la empresa es ${availableStock} unidades.\n\n¿Desea continuar con el bloqueo de reserva asignado a esta sede?`);
+    if (!confirmProceed) return;
   }
 
   product.reservedStock = (product.reservedStock || 0) + quantity;
@@ -108824,19 +108876,21 @@ function handleCreateReservation(e) {
     customerName: custObj ? custObj.name : "",
     productId,
     productSku: product.sku,
+    locationId,
     quantity,
     reason: reason || "Reserva de Stock",
     status: "ACTIVA",
-    date: new Date().toISOString().substring(0, 10)
+    date: new Date().toISOString().substring(0, 10),
+    reservationDate: new Date().toISOString().substring(0, 10)
   };
 
   if (!appState.reservations) appState.reservations = [];
   appState.reservations.unshift(newRes);
   saveProductsToDisk();
   saveReservationsToDisk();
-  addActivityLog("CREACION", "Reservation", `Bloqueo/Reserva de ${quantity} unidades para ${product.sku}. Motivo: ${reason}`);
+  addActivityLog("CREACION", "Reservation", `Bloqueo/Reserva de ${quantity} unidades para ${product.sku} en '${locName}'. Motivo: ${reason}`);
 
-  alert("✅ Stock reservado y bloqueado exitosamente.");
+  alert(`✅ Stock reservado y bloqueado exitosamente en '${locName}'.`);
   closeReservationModal();
   document.getElementById("newReservationForm")?.reset();
   const resCustSelect = document.getElementById("resCustomerSelect");
@@ -108855,7 +108909,9 @@ function filterResCustomerAutocomplete(query = "") {
   const customers = appState.customers || [];
   const filtered = customers.filter(c => {
     if (!q) return true;
-    const docLabel = c.documentType === "NIT" ? `NIT ${c.documentNumber}-${c.verificationDigit}` : `CC ${c.documentNumber}`;
+    const docNum = c.documentNumber || c.documentNum || '';
+    const docType = c.documentType || c.documentTypeAbbr || 'NIT';
+    const docLabel = docType === "NIT" ? `NIT ${docNum}${c.verificationDigit ? '-'+c.verificationDigit : ''}` : `CC ${docNum}`;
     const full = `${c.name} ${docLabel} ${c.email || ''}`.toLowerCase();
     return full.includes(q);
   });
@@ -108867,7 +108923,9 @@ function filterResCustomerAutocomplete(query = "") {
   }
 
   panel.innerHTML = filtered.slice(0, 15).map(c => {
-    const docLabel = c.documentType === "NIT" ? `NIT ${c.documentNumber}-${c.verificationDigit}` : `CC ${c.documentNumber}`;
+    const docNum = c.documentNumber || c.documentNum || '';
+    const docType = c.documentType || c.documentTypeAbbr || 'NIT';
+    const docLabel = docType === "NIT" ? `NIT ${docNum}${c.verificationDigit ? '-'+c.verificationDigit : ''}` : `CC ${docNum}`;
     const labelText = `${c.name} (${docLabel})`;
     const safeLabel = labelText.replace(/'/g, "\\'");
     return `<div class="autocomplete-dropdown-item" onclick="selectResCustomer('${c.id}', '${safeLabel}')">
@@ -108924,6 +108982,7 @@ function selectResProduct(id, text) {
   if (prodInput) prodInput.value = text;
   if (prodSelect) prodSelect.value = id;
   if (panel) panel.style.display = "none";
+  updateResAvailableStockInfo();
 }
 
 document.addEventListener("click", function(e) {

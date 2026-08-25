@@ -1084,6 +1084,7 @@
                     <th>ID Reserva</th>
                     <th>Cliente</th>
                     <th>Producto</th>
+                    <th>Ubicación / Sede</th>
                     <th>Cantidad Reservada</th>
                     <th>Motivo / Observación</th>
                     <th>Fecha Reserva</th>
@@ -2161,6 +2162,15 @@
             <input type="hidden" id="resProductSelect">
             <div id="resProductDropdown" class="autocomplete-dropdown-panel" style="display: none;"></div>
           </div>
+
+          <div class="form-group">
+            <label class="form-label" for="resLocationSelect">Ubicación / Sede de Origen de la Reserva *</label>
+            <select id="resLocationSelect" class="form-control" required onchange="updateResAvailableStockInfo()">
+              <!-- Populated dynamically via JS -->
+            </select>
+            <small id="resStockLocHelp" style="display: block; margin-top: 0.3rem; font-size: 0.78rem; color: var(--accent-green);"></small>
+          </div>
+
           <div class="form-group">
             <label class="form-label">Cantidad a Bloquear del Stock Disponible *</label>
             <input type="number" id="resQuantity" class="form-control" min="1" value="1" required>

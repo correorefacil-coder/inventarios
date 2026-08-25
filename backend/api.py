@@ -164,6 +164,7 @@ class Reservation(db.Model):
     id              = db.Column(db.String(64), primary_key=True)
     productId       = db.Column(db.String(64), nullable=False)
     customerId      = db.Column(db.String(64), nullable=False)
+    locationId      = db.Column(db.String(64))
     quantity        = db.Column(db.Integer, nullable=False)
     status          = db.Column(db.String(30), default='ACTIVA')
     reason          = db.Column(db.Text)
@@ -177,8 +178,8 @@ class Reservation(db.Model):
             try: sids=json.loads(self.serialIds)
             except: sids=[]
         return {'id':self.id,'productId':self.productId,'customerId':self.customerId,
-                'quantity':self.quantity,'status':self.status,'reason':self.reason or '',
-                'serialIds':sids,'createdByUserId':self.createdByUserId or '',
+                'locationId':self.locationId or '','quantity':self.quantity,'status':self.status,
+                'reason':self.reason or '','serialIds':sids,'createdByUserId':self.createdByUserId or '',
                 'reservationDate':self.reservationDate or '','expiryDate':self.expiryDate or ''}
 
 class SerializedItem(db.Model):
@@ -288,6 +289,12 @@ def init_db():
             for col, col_type in mov_new_cols.items():
                 if col not in existing_mov_cols:
                     conn.exec_driver_sql(f"ALTER TABLE movements ADD COLUMN {col} {col_type}")
+
+            # Columnas nuevas de reservations
+            existing_res_cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(reservations)").fetchall()}
+            if 'locationId' not in existing_res_cols:
+                conn.exec_driver_sql("ALTER TABLE reservations ADD COLUMN locationId VARCHAR(64)")
+
             conn.commit()
     except Exception as e:
         print(f"[WARN] Error en migracion de columnas: {e}")
@@ -470,14 +477,17 @@ def save_reservations():
         rid=rdata.get('id') or gen_id()
         if rid not in existing:
             db.session.add(Reservation(id=rid,productId=rdata.get('productId',''),
-                customerId=rdata.get('customerId',''),quantity=rdata.get('quantity',1),
+                customerId=rdata.get('customerId',''),locationId=rdata.get('locationId',''),
+                quantity=rdata.get('quantity',1),
                 status=rdata.get('status','ACTIVA'),reason=rdata.get('reason',''),
                 serialIds=json.dumps(rdata.get('serialIds',[])),
                 createdByUserId=rdata.get('createdByUserId',''),
                 reservationDate=rdata.get('reservationDate',now_iso()),expiryDate=rdata.get('expiryDate','')))
         else:
             r=Reservation.query.get(rid)
-            if r: r.status=rdata.get('status',r.status)
+            if r:
+                r.status=rdata.get('status',r.status)
+                if rdata.get('locationId'): r.locationId=rdata.get('locationId')
     db.session.commit()
     return jsonify({'ok':True,'count':len(data)})
 
