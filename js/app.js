@@ -104471,6 +104471,16 @@ function saveThemePreferences() {
     localStorage.setItem('mascampo_custom_colors', JSON.stringify(activeCustomColors));
   }
 
+  // Guardar configuración de tema en SQLite
+  checkBackendOnline().then(online => {
+    if (online) {
+      _apiPost('/settings', {
+        'mascampo_theme': activeTempPreset,
+        'mascampo_custom_colors': activeTempPreset === 'custom' ? JSON.stringify(activeCustomColors) : ''
+      }).catch(err => console.warn('Error guardando tema en SQLite:', err));
+    }
+  });
+
   applyTheme(activeTempPreset, activeCustomColors);
 
   const themeSelector = document.getElementById("themeSelector");
@@ -104488,6 +104498,16 @@ function resetThemeToDefault() {
   localStorage.setItem('mascampo_theme', 'dark');
   localStorage.removeItem('mascampo_custom_colors');
   
+  // Resetear configuración en SQLite
+  checkBackendOnline().then(online => {
+    if (online) {
+      _apiPost('/settings', {
+        'mascampo_theme': 'dark',
+        'mascampo_custom_colors': ''
+      }).catch(err => console.warn('Error reseteando tema en SQLite:', err));
+    }
+  });
+
   applyTheme('dark');
 
   const themeSelector = document.getElementById("themeSelector");
@@ -110726,18 +110746,25 @@ function loadPersistedPendingIntakes() {
   appState.pendingIntakes = [...initialPendingIntakes];
 }
 
-function savePendingIntakesToDisk() {
+async function savePendingIntakesToDisk() {
   try {
     localStorage.setItem("mascampo_pending_intakes_db", JSON.stringify(appState.pendingIntakes));
   } catch (e) {
     console.error("Error guardando ingresos pendientes en disco", e);
+  }
+  try {
+    if (await checkBackendOnline()) {
+      await _apiPost('/pending-intakes', appState.pendingIntakes);
+    }
+  } catch (err) {
+    console.warn("Error guardando pending intakes en SQLite:", err.message);
   }
 }
 
 // Configuración de URL base de la API:
 // Si corre en localhost sin puerto 5000 usa localhost:5000. Si está en un servidor remoto con reverse proxy (Nginx), usa '/api'.
 const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? (window.location.port === '5000' ? '/api' : 'http://localhost:5000/api')
+  ? (window.location.port === '8080' ? '/api' : 'http://localhost:8080/api')
   : `${window.location.origin}/api`;
 let _backendOnline = null; // null=sin probar, true/false=resultado
 
@@ -110779,7 +110806,7 @@ async function loadAllFromAPI(shouldRenderAll = true) {
   if (!online) return; // sin backend, ya se cargó desde localStorage abajo
 
   try {
-    const [users, products, movements, customers, reservations, serials, categories, locations] = await Promise.all([
+    const [users, products, movements, customers, reservations, serials, categories, locations, pendingIntakes, settings] = await Promise.all([
       _apiGet('/users'),
       _apiGet('/products'),
       _apiGet('/movements'),
@@ -110788,6 +110815,8 @@ async function loadAllFromAPI(shouldRenderAll = true) {
       _apiGet('/serialized-items'),
       _apiGet('/categories'),
       _apiGet('/locations'),
+      _apiGet('/pending-intakes').catch(() => []),
+      _apiGet('/settings').catch(() => ({}))
     ]);
 
     if (Array.isArray(users) && users.length > 0) {
@@ -110828,6 +110857,30 @@ async function loadAllFromAPI(shouldRenderAll = true) {
     if (Array.isArray(categories) && categories.length > 0) {
       appState.categories = categories;
       localStorage.setItem("mascampo_categories_db", JSON.stringify(categories));
+    }
+    if (Array.isArray(pendingIntakes) && pendingIntakes.length > 0) {
+      appState.pendingIntakes = pendingIntakes;
+      localStorage.setItem("mascampo_pending_intakes_db", JSON.stringify(pendingIntakes));
+    }
+    if (settings && typeof settings === 'object') {
+      if (settings.mascampo_theme) {
+        let th = settings.mascampo_theme;
+        try { th = JSON.parse(th); } catch {}
+        appState.currentTheme = th;
+        localStorage.setItem('mascampo_theme', th);
+      }
+      if (settings.mascampo_custom_colors) {
+        let cols = settings.mascampo_custom_colors;
+        try { cols = typeof cols === 'string' ? JSON.parse(cols) : cols; } catch {}
+        if (cols) {
+          activeCustomColors = { ...activeCustomColors, ...cols };
+          appState.customColors = activeCustomColors;
+          localStorage.setItem('mascampo_custom_colors', JSON.stringify(activeCustomColors));
+        }
+      }
+      if (appState.currentTheme) {
+        applyTheme(appState.currentTheme, activeCustomColors);
+      }
     }
 
     if (shouldRenderAll) {

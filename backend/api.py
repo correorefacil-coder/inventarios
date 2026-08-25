@@ -235,6 +235,51 @@ class Category(db.Model):
         return {'id':self.id,'name':self.name,'description':self.description or '',
                 'color':self.color or '','createdAt':self.createdAt or ''}
 
+class PendingIntake(db.Model):
+    __tablename__ = 'pending_intakes'
+    id            = db.Column(db.String(64), primary_key=True)
+    invoiceNumber = db.Column(db.String(100))
+    productId     = db.Column(db.String(64))
+    sku           = db.Column(db.String(100))
+    productName   = db.Column(db.String(300))
+    quantity      = db.Column(db.Integer, default=1)
+    locationId    = db.Column(db.String(64))
+    supplier      = db.Column(db.String(300))
+    requester     = db.Column(db.String(200))
+    requesterEmail= db.Column(db.String(200))
+    status        = db.Column(db.String(50), default='PENDIENTE_APROBACION')
+    dataJson      = db.Column(db.Text)
+    createdAt     = db.Column(db.String(30))
+    def to_dict(self):
+        obj = {}
+        if self.dataJson:
+            try: obj = json.loads(self.dataJson)
+            except: obj = {}
+        base = {
+            'id': self.id,
+            'invoiceNumber': self.invoiceNumber or '',
+            'productId': self.productId or '',
+            'sku': self.sku or '',
+            'productName': self.productName or '',
+            'quantity': self.quantity or 1,
+            'locationId': self.locationId or '',
+            'supplier': self.supplier or '',
+            'requester': self.requester or '',
+            'requesterEmail': self.requesterEmail or '',
+            'status': self.status or 'PENDIENTE_APROBACION',
+            'createdAt': self.createdAt or ''
+        }
+        base.update(obj)
+        return base
+
+class SystemSetting(db.Model):
+    __tablename__ = 'system_settings'
+    key       = db.Column(db.String(100), primary_key=True)
+    value     = db.Column(db.Text, nullable=False)
+    updatedAt = db.Column(db.String(30))
+    def to_dict(self):
+        return {'key': self.key, 'value': self.value, 'updatedAt': self.updatedAt or ''}
+
 SALT = '$'
 INITIAL_USERS = [
     {'id':'usr-super','firstName':'Superusuario','lastName':'Gerencia','email':'gerencia@softproductiva.com',
@@ -588,6 +633,70 @@ def save_audit_logs():
                 timestamp=ldata.get('timestamp',now_iso())))
     db.session.commit()
     return jsonify({'ok':True})
+
+@app.route('/api/pending-intakes', methods=['GET'])
+def get_pending_intakes():
+    return jsonify([pi.to_dict() for pi in PendingIntake.query.order_by(PendingIntake.createdAt.desc()).all()])
+
+@app.route('/api/pending-intakes', methods=['POST'])
+def save_pending_intakes():
+    data = request.get_json()
+    if not isinstance(data, list): return jsonify({'error': 'Lista esperada'}), 400
+    known = {'id','invoiceNumber','productId','sku','productName','quantity','locationId','supplier','requester','requesterEmail','status','createdAt'}
+    for pdata in data:
+        pid = pdata.get('id') or gen_id()
+        extra = {k: v for k, v in pdata.items() if k not in known}
+        pi = PendingIntake.query.get(pid)
+        if pi:
+            pi.invoiceNumber = pdata.get('invoiceNumber', pi.invoiceNumber)
+            pi.productId = pdata.get('productId', pi.productId)
+            pi.sku = pdata.get('sku', pi.sku)
+            pi.productName = pdata.get('productName', pi.productName)
+            pi.quantity = pdata.get('quantity', pi.quantity)
+            pi.locationId = pdata.get('locationId', pi.locationId)
+            pi.supplier = pdata.get('supplier', pi.supplier)
+            pi.requester = pdata.get('requester', pi.requester)
+            pi.requesterEmail = pdata.get('requesterEmail', pi.requesterEmail)
+            pi.status = pdata.get('status', pi.status)
+            pi.dataJson = json.dumps(extra, ensure_ascii=False)
+        else:
+            db.session.add(PendingIntake(
+                id=pid,
+                invoiceNumber=pdata.get('invoiceNumber', ''),
+                productId=pdata.get('productId', ''),
+                sku=pdata.get('sku', ''),
+                productName=pdata.get('productName', ''),
+                quantity=pdata.get('quantity', 1),
+                locationId=pdata.get('locationId', ''),
+                supplier=pdata.get('supplier', ''),
+                requester=pdata.get('requester', ''),
+                requesterEmail=pdata.get('requesterEmail', ''),
+                status=pdata.get('status', 'PENDIENTE_APROBACION'),
+                dataJson=json.dumps(extra, ensure_ascii=False),
+                createdAt=pdata.get('createdAt', now_iso()[:10])
+            ))
+    db.session.commit()
+    return jsonify({'ok': True, 'count': len(data)})
+
+@app.route('/api/settings', methods=['GET'])
+def get_settings():
+    settings = {s.key: s.value for s in SystemSetting.query.all()}
+    return jsonify(settings)
+
+@app.route('/api/settings', methods=['POST'])
+def save_settings():
+    data = request.get_json()
+    if not isinstance(data, dict): return jsonify({'error': 'Objeto esperado'}), 400
+    for k, v in data.items():
+        val_str = json.dumps(v, ensure_ascii=False) if not isinstance(v, str) else v
+        s = SystemSetting.query.get(k)
+        if s:
+            s.value = val_str
+            s.updatedAt = now_iso()
+        else:
+            db.session.add(SystemSetting(key=k, value=val_str, updatedAt=now_iso()))
+    db.session.commit()
+    return jsonify({'ok': True})
 
 from flask import send_from_directory
 
