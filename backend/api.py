@@ -99,10 +99,13 @@ class Movement(db.Model):
     quantity      = db.Column(db.Integer, nullable=False)
     invoiceNumber = db.Column(db.String(100))
     customerId    = db.Column(db.String(64))
+    customerName  = db.Column(db.String(300))
     serialNumber  = db.Column(db.String(200))
     notes         = db.Column(db.Text)
     userId        = db.Column(db.String(64))
     locationId    = db.Column(db.String(64))
+    fromLocationId= db.Column(db.String(64))
+    toLocationId  = db.Column(db.String(64))
     attachments   = db.Column(db.Text)
     date          = db.Column(db.String(30))
     def to_dict(self):
@@ -112,9 +115,23 @@ class Movement(db.Model):
             except: att=[]
         return {'id':self.id,'type':self.type,'productId':self.productId,'quantity':self.quantity,
                 'invoiceNumber':self.invoiceNumber or '','customerId':self.customerId or '',
-                'serialNumber':self.serialNumber or '','notes':self.notes or '',
-                'userId':self.userId or '','locationId':self.locationId or '',
-                'attachments':att,'date':self.date or ''}
+                'customerName':self.customerName or '','serialNumber':self.serialNumber or '',
+                'notes':self.notes or '','user':self.userId or '','userId':self.userId or '',
+                'locationId':self.locationId or '','fromLocationId':self.fromLocationId or '',
+                'toLocationId':self.toLocationId or '','attachments':att,'date':self.date or ''}
+
+class Location(db.Model):
+    __tablename__ = 'locations'
+    id          = db.Column(db.String(64), primary_key=True)
+    name        = db.Column(db.String(200), nullable=False)
+    address     = db.Column(db.String(300))
+    phone       = db.Column(db.String(50))
+    manager     = db.Column(db.String(200))
+    active      = db.Column(db.Boolean, default=True)
+    createdAt   = db.Column(db.String(30))
+    def to_dict(self):
+        return {'id':self.id,'name':self.name,'address':self.address or '','phone':self.phone or '',
+                'manager':self.manager or '','active':self.active,'createdAt':self.createdAt or ''}
 
 class Customer(db.Model):
     __tablename__ = 'customers'
@@ -356,10 +373,36 @@ def save_movements():
         if mid not in existing:
             db.session.add(Movement(id=mid,type=mdata.get('type',''),productId=mdata.get('productId',''),
                 quantity=mdata.get('quantity',0),invoiceNumber=mdata.get('invoiceNumber',''),
-                customerId=mdata.get('customerId',''),serialNumber=mdata.get('serialNumber',''),
-                notes=mdata.get('notes',''),userId=mdata.get('userId',mdata.get('registeredBy','')),
+                customerId=mdata.get('customerId',''),customerName=mdata.get('customerName',''),
+                serialNumber=mdata.get('serialNumber',''),
+                notes=mdata.get('notes',''),userId=mdata.get('user',mdata.get('userId',mdata.get('registeredBy',''))),
                 locationId=mdata.get('locationId',''),
-                attachments=json.dumps(mdata.get('attachments',[])),date=mdata.get('date',now_iso())))
+                fromLocationId=mdata.get('fromLocationId',''),
+                toLocationId=mdata.get('toLocationId',''),
+                attachments=json.dumps(mdata.get('attachments',[])),date=mdata.get('date',now_iso()[:10])))
+    db.session.commit()
+    return jsonify({'ok':True,'count':len(data)})
+
+@app.route('/api/locations', methods=['GET'])
+def get_locations(): return jsonify([l.to_dict() for l in Location.query.all()])
+
+@app.route('/api/locations', methods=['POST'])
+def save_locations():
+    data=request.get_json()
+    if not isinstance(data,list): return jsonify({'error':'Lista esperada'}),400
+    for ldata in data:
+        lid=ldata.get('id') or gen_id()
+        loc=Location.query.get(lid)
+        if loc:
+            loc.name=ldata.get('name',loc.name)
+            loc.address=ldata.get('address',loc.address)
+            loc.phone=ldata.get('phone',loc.phone)
+            loc.manager=ldata.get('manager',loc.manager)
+            loc.active=ldata.get('active',loc.active)
+        else:
+            db.session.add(Location(id=lid,name=ldata.get('name','Sede'),address=ldata.get('address',''),
+                phone=ldata.get('phone',''),manager=ldata.get('manager',''),
+                active=ldata.get('active',True),createdAt=ldata.get('createdAt',now_iso()[:10])))
     db.session.commit()
     return jsonify({'ok':True,'count':len(data)})
 

@@ -106335,6 +106335,8 @@ function renderLocationsView() {
       </tr>
     `;
   }).join('');
+
+  renderTransfersHistoryTable();
 }
 
 function openLocationModal(locId = null) {
@@ -106579,13 +106581,129 @@ function handleTransferProductSelect() {
   }
 }
 
-function handleTransferStock(e) {
+let pendingTransferAttachments = [];
+
+async function renderTransferSelectedFilesList(input) {
+  if (!input || !input.files || input.files.length === 0) return;
+
+  const newFiles = Array.from(input.files);
+  for (const f of newFiles) {
+    const alreadyExists = pendingTransferAttachments.some(a => a.name === f.name && a.size === f.size);
+    if (!alreadyExists) {
+      const dataUrl = await readFileAsDataURL(f);
+      pendingTransferAttachments.push({
+        id: `att-tr-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        name: f.name,
+        size: f.size,
+        type: f.type.includes('image') ? 'image' : 'pdf',
+        icon: f.type.includes('image') ? '📷' : '📄',
+        dataUrl: dataUrl
+      });
+    }
+  }
+
+  input.value = "";
+  renderTransferFilesPreview();
+}
+
+function removeTransferAttachment(id) {
+  pendingTransferAttachments = pendingTransferAttachments.filter(a => a.id !== id);
+  renderTransferFilesPreview();
+}
+
+function renderTransferFilesPreview() {
+  const container = document.getElementById("transferFilesListPreview");
+  if (!container) return;
+  if (!pendingTransferAttachments || pendingTransferAttachments.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+  container.innerHTML = pendingTransferAttachments.map(f => {
+    const isImg = f.type === "image";
+    return `
+      <div style="display: flex; align-items: center; gap: 0.35rem; background: var(--bg-card); border: 1px solid var(--border-color); padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.76rem;">
+        <span>${f.icon}</span>
+        <span style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${f.name}</span>
+        ${isImg && f.dataUrl ? `
+          <button type="button" class="btn btn-secondary" style="padding: 0.1rem 0.3rem; font-size: 0.68rem;" onclick="previewAttachment('${f.name}', '${f.type}', '${f.dataUrl}')">
+            👁️
+          </button>
+        ` : ''}
+        <button type="button" class="btn btn-secondary" style="padding: 0.1rem 0.3rem; font-size: 0.68rem; color: #ef4444;" onclick="removeTransferAttachment('${f.id}')">
+          ✖
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderTransfersHistoryTable() {
+  const tableBody = document.getElementById("transfersHistoryTableBody");
+  const countBadge = document.getElementById("transfersHistoryCountBadge");
+  if (!tableBody) return;
+
+  const transfers = appState.movements.filter(m => m.type === "TRASLADO_UBICACION");
+
+  if (countBadge) {
+    countBadge.textContent = `${transfers.length} Traslados Registrados`;
+  }
+
+  if (transfers.length === 0) {
+    tableBody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">
+          No hay registros históricos de traslados entre bodegas hasta el momento.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tableBody.innerHTML = transfers.map(m => {
+    const prod = appState.products.find(p => p.id === m.productId);
+    const atts = m.attachments || [];
+    const fromLoc = appState.locations.find(l => l.id === m.fromLocationId);
+    const toLoc = appState.locations.find(l => l.id === m.toLocationId);
+    const routeText = (fromLoc && toLoc) ? `${fromLoc.name} ➔ ${toLoc.name}` : (m.customerName || '-');
+
+    return `
+      <tr>
+        <td><strong>${m.date}</strong></td>
+        <td><strong>${prod ? prod.sku : ''}</strong> - ${prod ? prod.name : ''}</td>
+        <td><strong style="color: var(--accent-teal);">${m.quantity} ${prod ? prod.unitOfMeasure : ''}</strong></td>
+        <td><span class="badge badge-purple" style="font-size: 0.78rem;">📍 ${routeText}</span></td>
+        <td>${m.invoiceNumber || '-'}</td>
+        <td><strong>👤 ${m.user || appState.currentUser.name}</strong></td>
+        <td>
+          <div style="font-size: 0.82rem; margin-bottom: 0.25rem;">${m.notes || '-'}</div>
+          ${atts.length > 0 ? `
+            <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
+              ${atts.map(a => `
+                <button class="btn btn-secondary" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;" onclick="previewAttachment('${a.name}', '${a.type}', ${a.dataUrl ? `'${a.dataUrl}'` : 'null'})">
+                  ${a.icon || '📎'} ${a.name}
+                </button>
+              `).join('')}
+            </div>
+          ` : '<span style="color: var(--text-muted); font-size: 0.75rem;">Sin archivos</span>'}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function handleTransferStock(e) {
   e.preventDefault();
   const prodId = document.getElementById("transferProduct").value;
   const fromLocId = document.getElementById("transferFromLoc").value;
   const toLocId = document.getElementById("transferToLoc").value;
   const qty = parseInt(document.getElementById("transferQuantity").value);
-  const notes = document.getElementById("transferNotes").value.trim();
+  const guideNum = document.getElementById("transferNotes").value.trim();
+  const obs = document.getElementById("transferDetailedObservations") ? document.getElementById("transferDetailedObservations").value.trim() : "";
+
+  if (!prodId) {
+    alert("⚠️ Por favor busque y seleccione el producto que desea trasladar.");
+    return;
+  }
 
   if (fromLocId === toLocId) {
     alert("⚠️ ERROR: La ubicación de origen y destino deben ser distintas.");
@@ -106620,6 +106738,12 @@ function handleTransferStock(e) {
   product.stockByLocation[fromLocId] -= qty;
   product.stockByLocation[toLocId] = (product.stockByLocation[toLocId] || 0) + qty;
 
+  const fullNotes = [
+    guideNum ? `Guía/Remisión: ${guideNum}` : '',
+    obs ? `Obs: ${obs}` : '',
+    selectedSerialNumbers.length > 0 ? `Seriales: ${selectedSerialNumbers.join(', ')}` : ''
+  ].filter(Boolean).join(' | ') || `Traslado de ${qty} unidades de '${fromLoc.name}' a '${toLoc.name}'`;
+
   if (product.requiresSerial && selectedSerialNumbers.length > 0) {
     selectedSerialNumbers.forEach(sNum => {
       const serialObj = appState.serializedItems.find(i => i.serialNumber === sNum && i.productId === prodId);
@@ -106629,7 +106753,7 @@ function handleTransferStock(e) {
           type: "TRASLADO_UBICACION",
           date: new Date().toISOString().substring(0, 10),
           user: appState.currentUser.name,
-          description: `Traslado de '${fromLoc.name}' a '${toLoc.name}'. Guía/Notas: ${notes || 'Sin observaciones'}`
+          description: `Traslado de '${fromLoc.name}' a '${toLoc.name}'. ${fullNotes}`
         });
       }
     });
@@ -106641,21 +106765,30 @@ function handleTransferStock(e) {
     type: "TRASLADO_UBICACION",
     productId: prodId,
     quantity: qty,
-    invoiceNumber: notes || `REM-TR-${Date.now().toString().slice(-4)}`,
-    customerName: `Traslado: ${fromLoc.name} ➔ ${toLoc.name}`,
+    invoiceNumber: guideNum || `REM-TR-${Date.now().toString().slice(-4)}`,
+    customerId: toLocId,
+    customerName: `${fromLoc.name} ➔ ${toLoc.name}`,
+    fromLocationId: fromLocId,
+    toLocationId: toLocId,
+    locationId: toLocId,
     user: appState.currentUser.name,
-    notes: `Traslado de ${qty} unidades de '${fromLoc.name}' a '${toLoc.name}'. Seriales: ${selectedSerialNumbers.join(', ') || 'N/A'}`
+    userId: appState.currentUser.id || appState.currentUser.email,
+    notes: fullNotes,
+    attachments: [...pendingTransferAttachments]
   };
 
   appState.movements.unshift(transferMov);
-  saveProductsToDisk();
-  saveMovementsToDisk();
-  saveSerializedItemsToDisk();
+  await saveProductsToDisk();
+  await saveMovementsToDisk();
+  await saveSerializedItemsToDisk();
 
   addActivityLog("MODIFICACION", "StockTransfer", `Traslado de ${qty} unidades de '${product.sku}' desde '${fromLoc.name}' hacia '${toLoc.name}'.`);
 
-  alert(`✅ TRASLADO EXITOSO: ${qty} unidades de ${product.sku} trasladadas a '${toLoc.name}'.`);
+  alert(`✅ TRASLADO EXITOSO: ${qty} unidades de ${product.sku} trasladadas a '${toLoc.name}' y registradas en la base de datos.`);
+  
   document.getElementById("transferStockForm").reset();
+  pendingTransferAttachments = [];
+  renderTransferFilesPreview();
   clearTransferProduct();
   populateDropdowns();
   renderAllViews();
