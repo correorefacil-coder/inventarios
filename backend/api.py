@@ -270,8 +270,30 @@ def gen_id(): return str(uuid.uuid4())
 
 def init_db():
     db.create_all()
+    # Migraciones automáticas de columnas SQLite para tablas existentes
+    try:
+        engine = db.engine
+        with engine.connect() as conn:
+            # Columnas nuevas de movements
+            existing_mov_cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(movements)").fetchall()}
+            mov_new_cols = {
+                'customerName': 'VARCHAR(300)',
+                'serialNumber': 'VARCHAR(200)',
+                'locationId': 'VARCHAR(64)',
+                'fromLocationId': 'VARCHAR(64)',
+                'toLocationId': 'VARCHAR(64)',
+                'notes': 'TEXT',
+                'attachments': 'TEXT'
+            }
+            for col, col_type in mov_new_cols.items():
+                if col not in existing_mov_cols:
+                    conn.exec_driver_sql(f"ALTER TABLE movements ADD COLUMN {col} {col_type}")
+            conn.commit()
+    except Exception as e:
+        print(f"[WARN] Error en migracion de columnas: {e}")
+
     for u in INITIAL_USERS:
-        if not User.query.get(u['id']):
+        if not db.session.get(User, u['id']):
             db.session.add(User(id=u['id'],firstName=u['firstName'],lastName=u['lastName'],
                 email=u['email'],password=u['password'],role=u['role'],phone=u['phone'],
                 address=u['address'],vinculacion=u['vinculacion'],document=u['document'],
@@ -540,5 +562,5 @@ def serve_static(path):
 
 if __name__ == '__main__':
     with app.app_context(): init_db()
-    print('✅ Servidor Mas Campo listo en: http://localhost:5000')
+    print('[OK] Servidor Mas Campo API listo en: http://localhost:5000')
     app.run(host='0.0.0.0', port=5000, debug=False)
