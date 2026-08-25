@@ -105274,10 +105274,23 @@ function populateDropdowns() {
 
   const transferFromLocSelect = document.getElementById("transferFromLoc");
   const transferToLocSelect = document.getElementById("transferToLoc");
+  const trFilterFromLocSelect = document.getElementById("trFilterFromLoc");
+  const trFilterToLocSelect = document.getElementById("trFilterToLoc");
   const activeLocationOptions = appState.locations.filter(l => l.active).map(l => `<option value="${l.id}">${l.name} (${l.manager})</option>`).join('');
+  const filterLocationOptions = `<option value="ALL">Todas las Sedes</option>` + appState.locations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
 
   if (transferFromLocSelect) transferFromLocSelect.innerHTML = activeLocationOptions;
   if (transferToLocSelect) transferToLocSelect.innerHTML = activeLocationOptions;
+  if (trFilterFromLocSelect) {
+    const curVal = trFilterFromLocSelect.value;
+    trFilterFromLocSelect.innerHTML = `<option value="ALL">Todas las Sedes de Salida</option>` + appState.locations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+    if (curVal) trFilterFromLocSelect.value = curVal;
+  }
+  if (trFilterToLocSelect) {
+    const curVal = trFilterToLocSelect.value;
+    trFilterToLocSelect.innerHTML = `<option value="ALL">Todas las Sedes de Destino</option>` + appState.locations.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+    if (curVal) trFilterToLocSelect.value = curVal;
+  }
 
   const movProductSelect = document.getElementById("movProduct");
   const forecastProductSelect = document.getElementById("forecastProductSelect");
@@ -106637,22 +106650,304 @@ function renderTransferFilesPreview() {
   }).join('');
 }
 
+let transferFilterState = {
+  productId: null,
+  dateFrom: "",
+  dateTo: "",
+  quantity: null,
+  users: [],
+  fromLoc: "ALL",
+  toLoc: "ALL"
+};
+
+function handleTransferFilterProductInput() {
+  const input = document.getElementById("trFilterProductInput");
+  const suggestions = document.getElementById("trFilterProductSuggestions");
+  const hidden = document.getElementById("trFilterProductId");
+  if (!input || !suggestions) return;
+
+  const q = input.value.toLowerCase().trim();
+  if (!q) {
+    if (hidden) hidden.value = "";
+    transferFilterState.productId = null;
+    renderTransfersHistoryTable();
+  }
+
+  const matches = appState.products.filter(p => {
+    if (!q) return true;
+    return (p.sku && p.sku.toLowerCase().includes(q)) || (p.name && p.name.toLowerCase().includes(q));
+  }).slice(0, 10);
+
+  if (matches.length === 0) {
+    suggestions.innerHTML = `<div style="padding: 0.5rem; text-align: center; color: var(--text-muted); font-size: 0.8rem;">No se encontraron productos</div>`;
+  } else {
+    suggestions.innerHTML = matches.map(p => `
+      <div class="autocomplete-suggestion-item" onclick="selectTransferFilterProduct('${p.id}', '${p.sku} - ${p.name.replace(/'/g, "\\'")}')">
+        <strong style="color: var(--accent-green); font-family: monospace; font-size: 0.82rem;">${p.sku}</strong>
+        <span style="font-size: 0.85rem; color: var(--text-main); margin-left: 0.3rem;">${p.name}</span>
+      </div>
+    `).join('');
+  }
+  suggestions.style.display = "block";
+}
+
+function selectTransferFilterProduct(id, label) {
+  const input = document.getElementById("trFilterProductInput");
+  const hidden = document.getElementById("trFilterProductId");
+  const suggestions = document.getElementById("trFilterProductSuggestions");
+  if (input) input.value = label;
+  if (hidden) hidden.value = id;
+  if (suggestions) suggestions.style.display = "none";
+  transferFilterState.productId = id;
+  renderTransfersHistoryTable();
+}
+
+function handleTransferFilterQtyInput() {
+  const input = document.getElementById("trFilterQuantity");
+  const suggestions = document.getElementById("trFilterQtySuggestions");
+  if (!input || !suggestions) return;
+
+  const val = input.value.trim();
+  transferFilterState.quantity = val ? parseInt(val) : null;
+  renderTransfersHistoryTable();
+
+  // Show unique quantities from existing transfers
+  const uniqueQtys = Array.from(new Set(
+    appState.movements
+      .filter(m => m.type === "TRASLADO_UBICACION" && m.quantity)
+      .map(m => m.quantity)
+  )).sort((a, b) => a - b);
+
+  if (uniqueQtys.length > 0) {
+    suggestions.innerHTML = `
+      <div style="padding: 0.3rem 0.5rem; font-size: 0.72rem; color: var(--text-muted); border-bottom: 1px solid var(--border-color);">
+        Cantidades registradas en traslados:
+      </div>
+      ${uniqueQtys.map(q => `
+        <div class="autocomplete-suggestion-item" style="padding: 0.35rem 0.6rem; font-weight: 600;" onclick="selectTransferFilterQty(${q})">
+          🔢 ${q} Unidades
+        </div>
+      `).join('')}
+    `;
+    suggestions.style.display = "block";
+  } else {
+    suggestions.style.display = "none";
+  }
+}
+
+function selectTransferFilterQty(q) {
+  const input = document.getElementById("trFilterQuantity");
+  const suggestions = document.getElementById("trFilterQtySuggestions");
+  if (input) input.value = q;
+  if (suggestions) suggestions.style.display = "none";
+  transferFilterState.quantity = q;
+  renderTransfersHistoryTable();
+}
+
+function toggleTransferUserPopover(event) {
+  if (event) event.stopPropagation();
+  const popover = document.getElementById("trFilterUserPopover");
+  if (!popover) return;
+
+  if (popover.style.display === "block") {
+    popover.style.display = "none";
+    return;
+  }
+
+  // Get distinct users who have done transfers or from system users
+  const userSet = new Set();
+  appState.movements.filter(m => m.type === "TRASLADO_UBICACION").forEach(m => {
+    if (m.user) userSet.add(m.user);
+  });
+  appState.users.forEach(u => {
+    const fullName = `${u.firstName || ''} ${u.lastName || u.name || ''}`.trim();
+    if (fullName) userSet.add(fullName);
+  });
+
+  const usersList = Array.from(userSet).sort();
+
+  popover.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.35rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.35rem;">
+      <span style="font-size: 0.74rem; font-weight: 700; color: var(--accent-green);">Filtrar por Usuario</span>
+      <button type="button" class="btn btn-secondary" style="padding: 0.1rem 0.4rem; font-size: 0.68rem;" onclick="clearTransferUserFilters(event)">Todos</button>
+    </div>
+    ${usersList.map(u => {
+      const isChecked = transferFilterState.users.includes(u);
+      const safeUser = u.replace(/'/g, "\\'");
+      return `
+        <label class="amazon-checkbox-item" onclick="toggleTransferUserFilter('${safeUser}', event)">
+          <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleTransferUserFilter('${safeUser}', event)">
+          <span>👤 ${u}</span>
+        </label>
+      `;
+    }).join('')}
+  `;
+  popover.style.display = "block";
+}
+
+function toggleTransferUserFilter(userName, event) {
+  if (event) event.stopPropagation();
+  const idx = transferFilterState.users.indexOf(userName);
+  if (idx > -1) {
+    transferFilterState.users.splice(idx, 1);
+  } else {
+    transferFilterState.users.push(userName);
+  }
+  updateTransferUserButtonLabel();
+  renderTransfersHistoryTable();
+  toggleTransferUserPopover(null);
+  const popover = document.getElementById("trFilterUserPopover");
+  if (popover) popover.style.display = "block";
+}
+
+function clearTransferUserFilters(event) {
+  if (event) event.stopPropagation();
+  transferFilterState.users = [];
+  updateTransferUserButtonLabel();
+  renderTransfersHistoryTable();
+  const popover = document.getElementById("trFilterUserPopover");
+  if (popover) popover.style.display = "none";
+}
+
+function updateTransferUserButtonLabel() {
+  const btn = document.getElementById("trFilterUserBtn");
+  if (!btn) return;
+  if (transferFilterState.users.length === 0) {
+    btn.innerHTML = `<span>Todos los Usuarios</span><span>▾</span>`;
+    btn.style.borderColor = "var(--border-color)";
+    btn.style.background = "var(--bg-dark)";
+  } else {
+    btn.innerHTML = `<span>👤 ${transferFilterState.users.length} seleccionado(s)</span><span>▾</span>`;
+    btn.style.borderColor = "var(--accent-green)";
+    btn.style.background = "rgba(16,185,129,0.15)";
+  }
+}
+
+function resetTransferFilters() {
+  transferFilterState = {
+    productId: null,
+    dateFrom: "",
+    dateTo: "",
+    quantity: null,
+    users: [],
+    fromLoc: "ALL",
+    toLoc: "ALL"
+  };
+  const pInput = document.getElementById("trFilterProductInput");
+  const pHidden = document.getElementById("trFilterProductId");
+  const dFrom = document.getElementById("trFilterDateFrom");
+  const dTo = document.getElementById("trFilterDateTo");
+  const qInput = document.getElementById("trFilterQuantity");
+  const fLoc = document.getElementById("trFilterFromLoc");
+  const tLoc = document.getElementById("trFilterToLoc");
+
+  if (pInput) pInput.value = "";
+  if (pHidden) pHidden.value = "";
+  if (dFrom) dFrom.value = "";
+  if (dTo) dTo.value = "";
+  if (qInput) qInput.value = "";
+  if (fLoc) fLoc.value = "ALL";
+  if (tLoc) tLoc.value = "ALL";
+
+  updateTransferUserButtonLabel();
+  renderTransfersHistoryTable();
+}
+
+// Global click to close popovers
+document.addEventListener("click", (e) => {
+  const trUserPopover = document.getElementById("trFilterUserPopover");
+  const trUserBtn = document.getElementById("trFilterUserBtn");
+  if (trUserPopover && !trUserPopover.contains(e.target) && trUserBtn && !trUserBtn.contains(e.target)) {
+    trUserPopover.style.display = "none";
+  }
+
+  const pSuggs = document.getElementById("trFilterProductSuggestions");
+  const pInput = document.getElementById("trFilterProductInput");
+  if (pSuggs && !pSuggs.contains(e.target) && pInput && !pInput.contains(e.target)) {
+    pSuggs.style.display = "none";
+  }
+
+  const qSuggs = document.getElementById("trFilterQtySuggestions");
+  const qInput = document.getElementById("trFilterQuantity");
+  if (qSuggs && !qSuggs.contains(e.target) && qInput && !qInput.contains(e.target)) {
+    qSuggs.style.display = "none";
+  }
+});
+
 function renderTransfersHistoryTable() {
   const tableBody = document.getElementById("transfersHistoryTableBody");
   const countBadge = document.getElementById("transfersHistoryCountBadge");
   if (!tableBody) return;
 
-  const transfers = appState.movements.filter(m => m.type === "TRASLADO_UBICACION");
+  const dateFrom = document.getElementById("trFilterDateFrom")?.value || "";
+  const dateTo = document.getElementById("trFilterDateTo")?.value || "";
+  const fromLocVal = document.getElementById("trFilterFromLoc")?.value || "ALL";
+  const toLocVal = document.getElementById("trFilterToLoc")?.value || "ALL";
+
+  let transfers = appState.movements.filter(m => m.type === "TRASLADO_UBICACION");
+
+  // Ordenamiento estricto: del MÁS RECIENTE al MÁS VIEJO
+  transfers.sort((a, b) => {
+    const da = new Date(a.date || 0).getTime();
+    const db = new Date(b.date || 0).getTime();
+    return db - da;
+  });
+
+  const totalCount = transfers.length;
+
+  // Filtrado multi-criterio
+  if (transferFilterState.productId) {
+    transfers = transfers.filter(m => m.productId === transferFilterState.productId);
+  } else {
+    const pText = document.getElementById("trFilterProductInput")?.value.toLowerCase().trim();
+    if (pText) {
+      transfers = transfers.filter(m => {
+        const prod = appState.products.find(p => p.id === m.productId);
+        if (!prod) return false;
+        return (prod.sku && prod.sku.toLowerCase().includes(pText)) || (prod.name && prod.name.toLowerCase().includes(pText));
+      });
+    }
+  }
+
+  if (dateFrom) {
+    transfers = transfers.filter(m => {
+      const mDateStr = (m.date || "").substring(0, 10);
+      return mDateStr >= dateFrom;
+    });
+  }
+
+  if (dateTo) {
+    transfers = transfers.filter(m => {
+      const mDateStr = (m.date || "").substring(0, 10);
+      return mDateStr <= dateTo;
+    });
+  }
+
+  if (transferFilterState.quantity !== null && !isNaN(transferFilterState.quantity)) {
+    transfers = transfers.filter(m => m.quantity === transferFilterState.quantity);
+  }
+
+  if (transferFilterState.users && transferFilterState.users.length > 0) {
+    transfers = transfers.filter(m => transferFilterState.users.includes(m.user));
+  }
+
+  if (fromLocVal !== "ALL") {
+    transfers = transfers.filter(m => m.fromLocationId === fromLocVal);
+  }
+
+  if (toLocVal !== "ALL") {
+    transfers = transfers.filter(m => m.toLocationId === toLocVal || m.locationId === toLocVal);
+  }
 
   if (countBadge) {
-    countBadge.textContent = `${transfers.length} Traslados Registrados`;
+    countBadge.textContent = `${transfers.length} de ${totalCount} Traslados`;
   }
 
   if (transfers.length === 0) {
     tableBody.innerHTML = `
       <tr>
         <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">
-          No hay registros históricos de traslados entre bodegas hasta el momento.
+          No se encontraron registros de traslados con los filtros seleccionados.
         </td>
       </tr>
     `;
@@ -106666,9 +106961,23 @@ function renderTransfersHistoryTable() {
     const toLoc = appState.locations.find(l => l.id === m.toLocationId);
     const routeText = (fromLoc && toLoc) ? `${fromLoc.name} ➔ ${toLoc.name}` : (m.customerName || '-');
 
+    // Formatear Fecha y Hora amigables
+    let displayDate = m.date || '';
+    if (m.date && m.date.includes('T')) {
+      try {
+        const dObj = new Date(m.date);
+        const y = dObj.getFullYear();
+        const mon = String(dObj.getMonth() + 1).padStart(2, '0');
+        const day = String(dObj.getDate()).padStart(2, '0');
+        const h = String(dObj.getHours()).padStart(2, '0');
+        const min = String(dObj.getMinutes()).padStart(2, '0');
+        displayDate = `${y}-${mon}-${day} ${h}:${min}`;
+      } catch (e) {}
+    }
+
     return `
       <tr>
-        <td><strong>${m.date}</strong></td>
+        <td style="white-space: nowrap;"><strong style="color: var(--accent-green);">${displayDate}</strong></td>
         <td><strong>${prod ? prod.sku : ''}</strong> - ${prod ? prod.name : ''}</td>
         <td><strong style="color: var(--accent-teal);">${m.quantity} ${prod ? prod.unitOfMeasure : ''}</strong></td>
         <td><span class="badge badge-purple" style="font-size: 0.78rem;">📍 ${routeText}</span></td>
@@ -106751,7 +107060,7 @@ async function handleTransferStock(e) {
         serialObj.currentLocationId = toLocId;
         serialObj.history.push({
           type: "TRASLADO_UBICACION",
-          date: new Date().toISOString().substring(0, 10),
+          date: new Date().toISOString(),
           user: appState.currentUser.name,
           description: `Traslado de '${fromLoc.name}' a '${toLoc.name}'. ${fullNotes}`
         });
@@ -106761,7 +107070,7 @@ async function handleTransferStock(e) {
 
   const transferMov = {
     id: `mov-tr-${Date.now()}`,
-    date: new Date().toISOString().substring(0, 10),
+    date: new Date().toISOString(),
     type: "TRASLADO_UBICACION",
     productId: prodId,
     quantity: qty,

@@ -379,7 +379,7 @@ def save_movements():
                 locationId=mdata.get('locationId',''),
                 fromLocationId=mdata.get('fromLocationId',''),
                 toLocationId=mdata.get('toLocationId',''),
-                attachments=json.dumps(mdata.get('attachments',[])),date=mdata.get('date',now_iso()[:10])))
+                attachments=json.dumps(mdata.get('attachments',[])),date=mdata.get('date',now_iso())))
     db.session.commit()
     return jsonify({'ok':True,'count':len(data)})
 

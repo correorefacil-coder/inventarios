@@ -1320,13 +1320,81 @@
               <h3 style="font-size: 1rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; margin: 0;">
                 📜 Historial Registrado de Traslados de Mercancía
               </h3>
-              <span id="transfersHistoryCountBadge" class="badge badge-purple">0 Traslados Registrados</span>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <span id="transfersHistoryCountBadge" class="badge badge-purple">0 Traslados Registrados</span>
+                <button type="button" class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;" onclick="resetTransferFilters()">
+                  🔄 Limpiar Filtros
+                </button>
+              </div>
             </div>
+
+            <!-- BARRA DE FILTROS AVANZADOS DE TRASLADOS -->
+            <div style="background: rgba(15, 23, 42, 0.65); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1.25rem;">
+              <div class="form-row" style="margin-bottom: 0.75rem;">
+                <!-- Filtro Autocompletar Producto -->
+                <div class="form-group" style="flex: 2; position: relative;">
+                  <label class="form-label" style="font-size: 0.76rem;">🔍 Buscar Producto (Nombre o SKU)</label>
+                  <input type="text" id="trFilterProductInput" class="form-control" placeholder="Escriba para autocompletar producto..." autocomplete="off" oninput="handleTransferFilterProductInput()" onfocus="handleTransferFilterProductInput()">
+                  <input type="hidden" id="trFilterProductId">
+                  <div id="trFilterProductSuggestions" class="autocomplete-dropdown-list" style="display: none; top: 100%;"></div>
+                </div>
+
+                <!-- Filtro Fechas Desde y Hasta -->
+                <div class="form-group" style="flex: 1;">
+                  <label class="form-label" style="font-size: 0.76rem;">📅 Fecha Desde</label>
+                  <input type="date" id="trFilterDateFrom" class="form-control" onchange="renderTransfersHistoryTable()">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                  <label class="form-label" style="font-size: 0.76rem;">📅 Fecha Hasta</label>
+                  <input type="date" id="trFilterDateTo" class="form-control" onchange="renderTransfersHistoryTable()">
+                </div>
+
+                <!-- Filtro Autocompletar Cantidad -->
+                <div class="form-group" style="flex: 1; position: relative;">
+                  <label class="form-label" style="font-size: 0.76rem;">🔢 Cantidad</label>
+                  <input type="number" id="trFilterQuantity" class="form-control" placeholder="Ej. 10" min="1" oninput="handleTransferFilterQtyInput()" onfocus="handleTransferFilterQtyInput()" autocomplete="off">
+                  <div id="trFilterQtySuggestions" class="autocomplete-dropdown-list" style="display: none; top: 100%;"></div>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <!-- Filtro Multi-select Checkboxes Usuarios -->
+                <div class="form-group" style="flex: 1.5; position: relative;">
+                  <label class="form-label" style="font-size: 0.76rem;">👤 Usuario Responsable (Múltiple Selección)</label>
+                  <div class="multi-select-wrapper" style="width: 100%;">
+                    <button type="button" id="trFilterUserBtn" class="multi-select-btn" style="width: 100%; justify-content: space-between;" onclick="toggleTransferUserPopover(event)">
+                      <span>Todos los Usuarios</span>
+                      <span>▾</span>
+                    </button>
+                    <div id="trFilterUserPopover" class="multi-select-popover" style="display: none; width: 100%;" onclick="event.stopPropagation()">
+                      <!-- JS Rendered Checkboxes -->
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Filtro Ubicación Origen -->
+                <div class="form-group" style="flex: 1;">
+                  <label class="form-label" style="font-size: 0.76rem;">📍 Ubicación de Salida (Origen)</label>
+                  <select id="trFilterFromLoc" class="form-control" onchange="renderTransfersHistoryTable()">
+                    <option value="ALL">Todas las Sedes de Salida</option>
+                  </select>
+                </div>
+
+                <!-- Filtro Ubicación Destino -->
+                <div class="form-group" style="flex: 1;">
+                  <label class="form-label" style="font-size: 0.76rem;">🏁 Ubicación de Destino</label>
+                  <select id="trFilterToLoc" class="form-control" onchange="renderTransfersHistoryTable()">
+                    <option value="ALL">Todas las Sedes de Destino</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
             <div class="table-responsive">
               <table class="custom-table">
                 <thead>
                   <tr>
-                    <th>Fecha</th>
+                    <th>Fecha y Hora</th>
                     <th>Producto (SKU)</th>
                     <th>Cant.</th>
                     <th>Sede Origen ➔ Destino</th>
