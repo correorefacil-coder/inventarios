@@ -109761,6 +109761,8 @@ function handleUpdateProduct(e) {
         }
       }
     });
+  }
+
   saveProductsToDisk();
   if (requiresSerial) {
     saveSerializedItemsToDisk();
