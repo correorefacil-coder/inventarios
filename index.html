@@ -1612,7 +1612,35 @@
           </div>
 
           <div class="panel">
-            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">🚨 Alertas Activas de Stock Mínimo</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+              <h3 style="font-size: 1rem; font-weight: 600; margin: 0;">🚨 Alertas de Inventario & Stock</h3>
+              <div id="alertsCountBadge" style="font-size: 0.8rem;">
+                <!-- JS populated badge -->
+              </div>
+            </div>
+
+            <!-- Search and Status Filter Toolbar -->
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.25rem; align-items: center;">
+              <div style="flex: 2; min-width: 250px; position: relative;">
+                <input type="text" id="alertProductSearch" class="form-control" placeholder="🔍 Autocompletar por Nombre, SKU, Marca, Proveedor o Referencia..." oninput="handleAlertProductSearchInput()" autocomplete="off">
+                <div id="alertProductSearchDropdown" class="autocomplete-dropdown-list" style="display: none;"></div>
+              </div>
+
+              <div style="flex: 1; min-width: 200px;">
+                <select id="alertStatusFilter" class="form-control" onchange="renderAlerts()">
+                  <option value="CRITICAL_AND_LOW">⚠️ Todos los Críticos & Agotados (Stock &le; Mínimo)</option>
+                  <option value="ALL">📦 Ver Todos los Productos del Catálogo</option>
+                  <option value="OUT_OF_STOCK">🔴 Agotados en Cero (Stock = 0)</option>
+                  <option value="BELOW_MIN">🟡 Por Debajo de Mínimo (Stock &le; Mínimo)</option>
+                  <option value="OPTIMAL">🟢 Stock Óptimo (Stock &gt; Mínimo)</option>
+                </select>
+              </div>
+
+              <button type="button" class="btn btn-secondary" onclick="clearAlertFilters()" style="padding: 0.45rem 0.85rem; font-size: 0.82rem;" title="Limpiar búsqueda y filtros">
+                🧹 Limpiar
+              </button>
+            </div>
+
             <div id="lowStockAlertsContainer">
               <!-- JS -->
             </div>
@@ -2693,6 +2721,6 @@
     };
   </script>
   <!-- Core Application Bundle -->
-  <script src="js/app.js?v=20260828_new_catalog_categories"></script>
+  <script src="js/app.js?v=20260828_alerts_search_filter"></script>
 </body>
 </html>

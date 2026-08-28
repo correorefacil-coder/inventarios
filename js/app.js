@@ -112862,28 +112862,196 @@ function cancelReservation(resId) {
   alert("✅ Reserva liberada exitosamente. El stock ha vuelto a estar disponible.");
 }
 
-function renderAlerts() {
-  const container = document.getElementById("lowStockAlertsContainer");
-  const lowStockItems = appState.products.filter(p => p.physicalStock <= p.minStockAlert);
+function handleAlertProductSearchInput() {
+  const input = document.getElementById("alertProductSearch");
+  const dropdown = document.getElementById("alertProductSearchDropdown");
+  if (!input || !dropdown) return;
 
-  if (lowStockItems.length === 0) {
-    container.innerHTML = `<div style="color: var(--accent-green); padding: 1rem;">✅ Todos los productos se encuentran por encima del Stock Mínimo.</div>`;
+  const query = input.value.trim().toLowerCase();
+  if (query.length === 0) {
+    dropdown.style.display = "none";
+    dropdown.innerHTML = "";
+    renderAlerts();
     return;
   }
 
-  container.innerHTML = lowStockItems.map(p => `
-    <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-      <div>
-        <strong style="color: #fca5a5;">⚠️ ALERTA DE COMPRA SUGERIDA: ${p.sku} - ${p.name}</strong>
-        <div style="font-size: 0.82rem; color: var(--text-muted);">
-          Stock Físico Actual: <strong>${p.physicalStock}</strong> ${p.unitOfMeasure} | Límite Mínimo: <strong>${p.minStockAlert}</strong>
+  const matches = appState.products.filter(p => {
+    return (p.sku && p.sku.toLowerCase().includes(query)) ||
+      (p.name && p.name.toLowerCase().includes(query)) ||
+      (p.brand && p.brand.toLowerCase().includes(query)) ||
+      (p.supplier && p.supplier.toLowerCase().includes(query)) ||
+      (p.reference && p.reference.toLowerCase().includes(query));
+  }).slice(0, 10);
+
+  if (matches.length === 0) {
+    dropdown.innerHTML = `<div class="autocomplete-empty-state">❌ No se encontraron productos coincidentes</div>`;
+    dropdown.style.display = "block";
+  } else {
+    dropdown.innerHTML = matches.map(p => `
+      <div class="autocomplete-item" onclick="selectAlertSearchProduct('${p.sku}')">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong style="color: var(--accent-green); font-size: 0.85rem;">${p.sku}</strong> - <span style="font-size: 0.82rem;">${p.name}</span>
+            <div style="font-size: 0.72rem; color: var(--text-muted);">
+              ${p.brand ? `🏷️ ${p.brand}` : ''} ${p.supplier ? `| 🚚 ${p.supplier}` : ''} ${p.reference ? `| 🔢 Ref: ${p.reference}` : ''}
+            </div>
+          </div>
+          <span class="badge ${p.physicalStock <= (p.minStockAlert || 0) ? (p.physicalStock === 0 ? 'badge-red' : 'badge-amber') : 'badge-green'}" style="font-size: 0.72rem;">
+            Stock: ${p.physicalStock}
+          </span>
         </div>
       </div>
-      <button class="btn btn-primary" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;" onclick="switchView('view-kardex')">
-        Generar Orden de Compra
-      </button>
-    </div>
-  `).join('');
+    `).join('');
+    dropdown.style.display = "block";
+  }
+
+  renderAlerts();
+}
+
+function selectAlertSearchProduct(sku) {
+  const input = document.getElementById("alertProductSearch");
+  const dropdown = document.getElementById("alertProductSearchDropdown");
+  if (input) input.value = sku;
+  if (dropdown) {
+    dropdown.style.display = "none";
+    dropdown.innerHTML = "";
+  }
+  renderAlerts();
+}
+
+function clearAlertFilters() {
+  const searchInput = document.getElementById("alertProductSearch");
+  const statusFilter = document.getElementById("alertStatusFilter");
+  const dropdown = document.getElementById("alertProductSearchDropdown");
+
+  if (searchInput) searchInput.value = "";
+  if (statusFilter) statusFilter.value = "CRITICAL_AND_LOW";
+  if (dropdown) {
+    dropdown.style.display = "none";
+    dropdown.innerHTML = "";
+  }
+  renderAlerts();
+}
+
+function renderAlerts() {
+  const container = document.getElementById("lowStockAlertsContainer");
+  const badgeContainer = document.getElementById("alertsCountBadge");
+  if (!container) return;
+
+  const searchQuery = (document.getElementById("alertProductSearch")?.value || "").toLowerCase().trim();
+  const statusFilter = document.getElementById("alertStatusFilter")?.value || "CRITICAL_AND_LOW";
+
+  let filtered = appState.products.filter(p => {
+    const minLimit = (p.minStockAlert !== undefined && p.minStockAlert !== null) ? p.minStockAlert : 0;
+    const stock = p.physicalStock || 0;
+
+    // Status Filter Matching
+    let matchesStatus = true;
+    if (statusFilter === "CRITICAL_AND_LOW") {
+      matchesStatus = (stock <= minLimit);
+    } else if (statusFilter === "OUT_OF_STOCK") {
+      matchesStatus = (stock === 0);
+    } else if (statusFilter === "BELOW_MIN") {
+      matchesStatus = (stock <= minLimit);
+    } else if (statusFilter === "OPTIMAL") {
+      matchesStatus = (stock > minLimit);
+    } else if (statusFilter === "ALL") {
+      matchesStatus = true;
+    }
+
+    // Search Query Matching
+    const matchesSearch = !searchQuery ||
+      (p.sku && p.sku.toLowerCase().includes(searchQuery)) ||
+      (p.name && p.name.toLowerCase().includes(searchQuery)) ||
+      (p.brand && p.brand.toLowerCase().includes(searchQuery)) ||
+      (p.supplier && p.supplier.toLowerCase().includes(searchQuery)) ||
+      (p.reference && p.reference.toLowerCase().includes(searchQuery)) ||
+      (p.category && p.category.toLowerCase().includes(searchQuery));
+
+    return matchesStatus && matchesSearch;
+  });
+
+  // Update summary badge
+  if (badgeContainer) {
+    const outOfStockCount = appState.products.filter(p => (p.physicalStock || 0) === 0).length;
+    const lowStockCount = appState.products.filter(p => (p.physicalStock || 0) <= (p.minStockAlert || 0)).length;
+    badgeContainer.innerHTML = `
+      <span class="badge badge-red" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">
+        🔴 Agotados: <strong>${outOfStockCount}</strong>
+      </span>
+      <span class="badge badge-amber" style="font-size: 0.75rem; padding: 0.2rem 0.5rem; margin-left: 0.4rem;">
+        ⚠️ En Alerta Mínima: <strong>${lowStockCount}</strong>
+      </span>
+      <span class="badge badge-blue" style="font-size: 0.75rem; padding: 0.2rem 0.5rem; margin-left: 0.4rem;">
+        📋 Mostrando: <strong>${filtered.length}</strong> / ${appState.products.length}
+      </span>
+    `;
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 1.5rem; text-align: center; color: var(--accent-green);">
+        ✅ No se encontraron productos bajo los criterios y filtros seleccionados.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map(p => {
+    const minLimit = (p.minStockAlert !== undefined && p.minStockAlert !== null) ? p.minStockAlert : 0;
+    const stock = p.physicalStock || 0;
+    const isZero = (stock === 0);
+    const isUnderLimit = (stock <= minLimit);
+
+    let cardBg = 'rgba(239, 68, 68, 0.12)';
+    let cardBorder = 'rgba(239, 68, 68, 0.35)';
+    let titleColor = '#fca5a5';
+    let statusText = 'ALERTA DE COMPRA SUGERIDA';
+    let statusBadge = 'badge-red';
+
+    if (!isUnderLimit) {
+      cardBg = 'rgba(16, 185, 129, 0.08)';
+      cardBorder = 'rgba(16, 185, 129, 0.25)';
+      titleColor = '#6ee7b7';
+      statusText = 'STOCK EN NIVEL ÓPTIMO';
+      statusBadge = 'badge-green';
+    } else if (!isZero) {
+      cardBg = 'rgba(245, 158, 11, 0.12)';
+      cardBorder = 'rgba(245, 158, 11, 0.35)';
+      titleColor = '#fcd34d';
+      statusText = 'ALERTA DE STOCK MÍNIMO';
+      statusBadge = 'badge-amber';
+    }
+
+    return `
+      <div style="background: ${cardBg}; border: 1px solid ${cardBorder}; padding: 1rem; border-radius: var(--radius-md); margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+        <div style="flex: 1; min-width: 260px;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
+            <strong style="color: ${titleColor}; font-size: 0.95rem;">${p.sku} - ${p.name}</strong>
+            <span class="badge ${statusBadge}" style="font-size: 0.7rem; padding: 0.1rem 0.4rem;">${statusText}</span>
+          </div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-top: 0.25rem;">
+            <span>Stock Físico Actual: <strong style="color: ${isZero ? '#ef4444' : (isUnderLimit ? '#f59e0b' : '#10b981')}; font-size: 0.95rem;">${stock}</strong> ${p.unitOfMeasure}</span>
+            <span>|</span>
+            <span>Límite Mínimo: <strong style="color: var(--text-main);">${minLimit}</strong></span>
+            ${p.brand ? `<span>|</span><span>🏷️ Marca: <strong>${p.brand}</strong></span>` : ''}
+            ${p.supplier ? `<span>|</span><span>🚚 Prov: <strong>${p.supplier}</strong></span>` : ''}
+            ${p.reference ? `<span>|</span><span>🔢 Ref: <strong>${p.reference}</strong></span>` : ''}
+            <span>|</span>
+            <span class="badge badge-purple" style="font-size: 0.68rem;">${p.category || 'General'}</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.4rem; align-items: center;">
+          <button class="btn btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.8rem;" onclick="openEditProductModal('${p.id}')" title="Modificar límite mínimo y stock">
+            ✏️ Ajustar Límite
+          </button>
+          <button class="btn btn-primary" style="padding: 0.35rem 0.8rem; font-size: 0.8rem;" onclick="switchView('view-kardex')">
+            🛒 Orden de Compra
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function runLinearRegressionForecast() {
