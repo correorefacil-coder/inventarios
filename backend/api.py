@@ -226,15 +226,27 @@ class AuditLog(db.Model):
     module      = db.Column(db.String(100))
     description = db.Column(db.Text)
     userId      = db.Column(db.String(64))
+    userName    = db.Column(db.String(200))
     userEmail   = db.Column(db.String(200))
     userRole    = db.Column(db.String(30))
     ipAddress   = db.Column(db.String(50))
+    deviceType  = db.Column(db.String(100))
     timestamp   = db.Column(db.String(30))
     def to_dict(self):
-        return {'id':self.id,'action':self.action or '','module':self.module or '',
-                'description':self.description or '','userId':self.userId or '',
-                'userEmail':self.userEmail or '','userRole':self.userRole or '',
-                'ipAddress':self.ipAddress or '','timestamp':self.timestamp or ''}
+        return {'id':self.id,
+                'actionType':self.action or 'ACTIVIDAD',
+                'action':self.action or 'ACTIVIDAD',
+                'entityName':self.module or 'Sistema',
+                'module':self.module or 'Sistema',
+                'description':self.description or '',
+                'userId':self.userId or '',
+                'userName':self.userName or self.userId or 'Superusuario Gerencia',
+                'userEmail':self.userEmail or 'gerencia@softproductiva.com',
+                'userRole':self.userRole or 'SUPERADMINISTRADOR',
+                'roleName':self.userRole or 'SUPERADMINISTRADOR',
+                'ipAddress':self.ipAddress or '127.0.0.1',
+                'deviceType':self.deviceType or 'Desktop Web',
+                'timestamp':self.timestamp or ''}
 
 class Category(db.Model):
     __tablename__ = 'categories'
@@ -387,6 +399,13 @@ def init_db():
                 conn.exec_driver_sql("ALTER TABLE products ADD COLUMN salePrice2 FLOAT DEFAULT 0")
             if 'salePrice3' not in existing_prod_cols:
                 conn.exec_driver_sql("ALTER TABLE products ADD COLUMN salePrice3 FLOAT DEFAULT 0")
+
+            # Columnas nuevas de audit_logs
+            existing_log_cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(audit_logs)").fetchall()}
+            if 'userName' not in existing_log_cols:
+                conn.exec_driver_sql("ALTER TABLE audit_logs ADD COLUMN userName VARCHAR(200)")
+            if 'deviceType' not in existing_log_cols:
+                conn.exec_driver_sql("ALTER TABLE audit_logs ADD COLUMN deviceType VARCHAR(100)")
 
             conn.commit()
     except Exception as e:
@@ -774,11 +793,20 @@ def save_audit_logs():
     for ldata in data:
         lid=ldata.get('id') or gen_id()
         if lid not in existing:
-            db.session.add(AuditLog(id=lid,action=ldata.get('action',''),
-                module=ldata.get('module',ldata.get('entityName','')),description=ldata.get('description',''),
-                userId=ldata.get('userId',''),userEmail=ldata.get('userEmail',''),
-                userRole=ldata.get('userRole',''),ipAddress=ldata.get('ipAddress',''),
-                timestamp=ldata.get('timestamp',now_iso())))
+            db.session.add(AuditLog(
+                id=lid,
+                action=ldata.get('actionType', ldata.get('action','ACTIVIDAD')),
+                module=ldata.get('entityName', ldata.get('module','Sistema')),
+                description=ldata.get('description',''),
+                userId=ldata.get('userName', ldata.get('userId','')),
+                userName=ldata.get('userName', ldata.get('userId','Superusuario Gerencia')),
+                userEmail=ldata.get('userEmail','gerencia@softproductiva.com'),
+                userRole=ldata.get('roleName', ldata.get('userRole','SUPERADMINISTRADOR')),
+                ipAddress=ldata.get('ipAddress', request.remote_addr or '127.0.0.1'),
+                deviceType=ldata.get('deviceType', 'Desktop Web'),
+                timestamp=ldata.get('timestamp', now_iso())
+            ))
+            existing.add(lid)
     db.session.commit()
     return jsonify({'ok':True})
 

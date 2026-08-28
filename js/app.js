@@ -114417,7 +114417,7 @@ async function loadAllFromAPI(shouldRenderAll = true) {
   if (!online) return; // sin backend, ya se cargó desde localStorage abajo
 
   try {
-    const [users, products, movements, customers, reservations, serials, categories, locations, pendingIntakes, settings] = await Promise.all([
+    const [users, products, movements, customers, reservations, serials, categories, locations, pendingIntakes, settings, auditLogs] = await Promise.all([
       _apiGet('/users'),
       _apiGet('/products'),
       _apiGet('/movements'),
@@ -114427,7 +114427,8 @@ async function loadAllFromAPI(shouldRenderAll = true) {
       _apiGet('/categories'),
       _apiGet('/locations'),
       _apiGet('/pending-intakes').catch(() => []),
-      _apiGet('/settings').catch(() => ({}))
+      _apiGet('/settings').catch(() => ({})),
+      _apiGet('/audit-logs').catch(() => [])
     ]);
 
     if (Array.isArray(users) && users.length > 0) {
@@ -114472,6 +114473,10 @@ async function loadAllFromAPI(shouldRenderAll = true) {
     if (Array.isArray(pendingIntakes) && pendingIntakes.length > 0) {
       appState.pendingIntakes = pendingIntakes;
       localStorage.setItem("mascampo_pending_intakes_db", JSON.stringify(pendingIntakes));
+    }
+    if (Array.isArray(auditLogs) && auditLogs.length > 0) {
+      appState.auditLogs = auditLogs;
+      localStorage.setItem("mascampo_audit_logs_db", JSON.stringify(auditLogs));
     }
     if (settings && typeof settings === 'object') {
       if (settings.mascampo_theme) {
