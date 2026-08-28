@@ -423,17 +423,33 @@ def init_db():
             db.session.add(Category(name=c['name'],description=c['description'],
                 color=c['color'],createdAt=now_iso()[:10]))
 
-    # Cargar productos iniciales a SQLite si la tabla de productos está vacía
-    if Product.query.count() == 0:
-        prod_json_path = os.path.join(os.path.dirname(BASE_DIR), 'all_new_products.json')
-        if not os.path.exists(prod_json_path):
-            prod_json_path = os.path.join(BASE_DIR, 'all_new_products.json')
-        if os.path.exists(prod_json_path):
-            try:
-                with open(prod_json_path, 'r', encoding='utf-8') as f:
-                    raw_prods = json.load(f)
-                for pdata in raw_prods:
-                    pid = pdata.get('id') or gen_id()
+    # Cargar y sincronizar precios de compra y venta desde all_new_products.json
+    prod_json_path = os.path.join(os.path.dirname(BASE_DIR), 'all_new_products.json')
+    if not os.path.exists(prod_json_path):
+        prod_json_path = os.path.join(BASE_DIR, 'initial_products.json')
+    if not os.path.exists(prod_json_path):
+        prod_json_path = os.path.join(BASE_DIR, 'all_new_products.json')
+    if os.path.exists(prod_json_path):
+        try:
+            with open(prod_json_path, 'r', encoding='utf-8') as f:
+                raw_prods = json.load(f)
+            prod_by_id = {p.id: p for p in Product.query.all()}
+            prod_by_sku = {p.sku.strip().upper(): p for p in Product.query.all() if p.sku}
+            updated_count = 0
+            inserted_count = 0
+            for pdata in raw_prods:
+                pid = pdata.get('id') or gen_id()
+                sku = str(pdata.get('sku') or '').strip().upper()
+                p = prod_by_id.get(pid) or prod_by_sku.get(sku)
+                if p:
+                    p.baseCost = float(pdata.get('baseCost', 0))
+                    p.salePrice = float(pdata.get('salePrice', 0))
+                    p.salePrice2 = float(pdata.get('salePrice2', 0))
+                    p.salePrice3 = float(pdata.get('salePrice3', 0))
+                    if not p.reference and pdata.get('reference'): p.reference = pdata.get('reference')
+                    if not p.supplier and pdata.get('supplier'): p.supplier = pdata.get('supplier')
+                    updated_count += 1
+                else:
                     loc_st = pdata.get('stockByLocation') or pdata.get('locationStock') or {'loc-1': pdata.get('physicalStock', 0)}
                     loc_str = json.dumps(loc_st) if isinstance(loc_st, dict) else str(loc_st or '{}')
                     db.session.add(Product(
@@ -459,10 +475,11 @@ def init_db():
                         createdAt=pdata.get('createdAt', now_iso()[:10]),
                         updatedAt=pdata.get('updatedAt', now_iso())
                     ))
-                db.session.commit()
-                print(f"[*] Se sembraron {len(raw_prods)} productos en la BD SQLite.")
-            except Exception as pe:
-                print(f"[WARN] Error al sembrar productos en BD SQLite: {pe}")
+                    inserted_count += 1
+            db.session.commit()
+            print(f"[*] Sincronización de catálogo: {updated_count} productos actualizados con nuevos costos/precios, {inserted_count} nuevos creados.")
+        except Exception as pe:
+            print(f"[WARN] Error al sincronizar productos en BD SQLite: {pe}")
 
     # Cargar clientes iniciales a SQLite si la tabla de clientes está vacía
     if Customer.query.count() == 0:
