@@ -103746,55 +103746,11 @@ const systemUsers = [
     password: "$MAS_CAMPO_SECURE_SALT_2026$170cf7594de1a72cf96e7b2dc03b7ac2990d8320909c71f5faf4be2caa99862b",
     mustChangePassword: false,
     active: true
-  },
-  {
-    id: "usr-leyla",
-    firstName: "Leyla Caterine",
-    lastName: "Bernal",
-    document: "1020304050",
-    email: "mascampo@gmail.com",
-    role: "ADMINISTRADOR",
-    vinculacion: "Gerente General",
-    address: "Sede Principal Más Campo",
-    phone: "3102607947",
-    password: "$MAS_CAMPO_SECURE_SALT_2026$53f058f7ad60fab4420aee174d53c2b7377a963d3e14fbd4395d7042f29602fe",
-    mustChangePassword: false,
-    active: true
-  },
-  {
-    id: "usr-2",
-    firstName: "Carlos",
-    lastName: "Mendoza",
-    document: "1019283746",
-    email: "logistica@mascampo.co",
-    role: "LOGISTICA",
-    vinculacion: "Planta (Nómina)",
-    address: "Km 4 Vía Acacías",
-    phone: "3187779900",
-    password: "$MAS_CAMPO_SECURE_SALT_2026$53f058f7ad60fab4420aee174d53c2b7377a963d3e14fbd4395d7042f29602fe",
-    mustChangePassword: false,
-    active: true
-  },
-  {
-    id: "usr-3",
-    firstName: "Laura",
-    lastName: "Gómez",
-    document: "1098765432",
-    email: "ventas@mascampo.co",
-    role: "VENTAS",
-    vinculacion: "Planta (Nómina)",
-    address: "Cra 15 # 93-40, Bogotá",
-    phone: "3153339876",
-    password: "$MAS_CAMPO_SECURE_SALT_2026$53f058f7ad60fab4420aee174d53c2b7377a963d3e14fbd4395d7042f29602fe",
-    mustChangePassword: false,
-    active: true
   }
 ];
 
 const initialLocations = [
-  { id: "loc-1", name: "Bodega Principal (Central)", address: "Calle 26 # 68-10, Bogotá", phone: "+573105551234", manager: "Jorge Ramos", active: true },
-  { id: "loc-2", name: "Punto de Venta Bogotá", address: "Carrera 15 # 93-40, Bogotá", phone: "+573153339876", manager: "Laura Gómez", active: true },
-  { id: "loc-3", name: "Almacén Central Llanos", address: "Km 4 Vía Villavicencio - Acacías", phone: "+573187779900", manager: "Carlos Mendoza", active: true }
+  { id: "loc-1", name: "Bodega Central", address: "Calle 26 # 68-10, Bogotá", phone: "+573105551234", manager: "Superusuario Gerencia", active: true }
 ];
 
 const initialAuditLogs = [];
