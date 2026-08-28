@@ -586,12 +586,23 @@
 
               <div class="form-row">
                 <div class="form-group">
-                  <label class="form-label" for="editBaseCost">Costo Base ($ COP / USD) *</label>
+                  <label class="form-label" for="editBaseCost">Costo Base ($ COP) *</label>
                   <input type="number" step="0.01" id="editBaseCost" class="form-control" required>
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="editSalePrice">Precio de Venta ($ COP / USD) *</label>
+                  <label class="form-label" for="editSalePrice">Precio General (Venta 1) *</label>
                   <input type="number" step="0.01" id="editSalePrice" class="form-control" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="editSalePrice2">Precio de Venta 2 (Mayorista / Preferencial)</label>
+                  <input type="number" step="0.01" id="editSalePrice2" class="form-control" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="editSalePrice3">Precio de Venta 3 (Especial / Distribuidor)</label>
+                  <input type="number" step="0.01" id="editSalePrice3" class="form-control" placeholder="0.00">
                 </div>
               </div>
 
@@ -1867,12 +1878,22 @@
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">Costo Base ($) *</label>
-              <input type="number" id="newBaseCost" class="form-control" step="0.01" value="100.00" required>
+              <label class="form-label">Costo Base ($ COP) *</label>
+              <input type="number" id="newBaseCost" class="form-control" step="0.01" value="0.00" required>
             </div>
             <div class="form-group">
-              <label class="form-label">Precio de Venta ($) *</label>
-              <input type="number" id="newSalePrice" class="form-control" step="0.01" value="180.00" required>
+              <label class="form-label">Precio General (Venta 1) *</label>
+              <input type="number" id="newSalePrice" class="form-control" step="0.01" value="0.00" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Precio de Venta 2 (Mayorista)</label>
+              <input type="number" id="newSalePrice2" class="form-control" step="0.01" value="0.00" placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Precio de Venta 3 (Especial)</label>
+              <input type="number" id="newSalePrice3" class="form-control" step="0.01" value="0.00" placeholder="0.00">
             </div>
           </div>
           <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
@@ -1952,12 +1973,23 @@
 
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">Costo Base ($) *</label>
+              <label class="form-label">Costo Base ($ COP) *</label>
               <input type="number" id="editBaseCost" class="form-control" step="0.01" required>
             </div>
             <div class="form-group">
-              <label class="form-label">Precio de Venta ($) *</label>
+              <label class="form-label">Precio General (Venta 1) *</label>
               <input type="number" id="editSalePrice" class="form-control" step="0.01" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Precio de Venta 2 (Mayorista)</label>
+              <input type="number" id="editModalSalePrice2" class="form-control" step="0.01" placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Precio de Venta 3 (Especial)</label>
+              <input type="number" id="editModalSalePrice3" class="form-control" step="0.01" placeholder="0.00">
             </div>
           </div>
 
@@ -2721,6 +2753,6 @@
     };
   </script>
   <!-- Core Application Bundle -->
-  <script src="js/app.js?v=20260828_alerts_search_filter"></script>
+  <script src="js/app.js?v=20260828_multitier_pricing"></script>
 </body>
 </html>

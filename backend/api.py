@@ -75,6 +75,8 @@ class Product(db.Model):
     minStockAlert = db.Column(db.Integer, default=5)
     baseCost      = db.Column(db.Float, default=0)
     salePrice     = db.Column(db.Float, default=0)
+    salePrice2    = db.Column(db.Float, default=0)
+    salePrice3    = db.Column(db.Float, default=0)
     physicalStock = db.Column(db.Integer, default=0)
     reservedStock = db.Column(db.Integer, default=0)
     locationStock = db.Column(db.Text)
@@ -90,7 +92,9 @@ class Product(db.Model):
                 'category':self.category or '','brand':self.brand or '',
                 'supplier':self.supplier or '','requiresSerial':self.requiresSerial,
                 'unitOfMeasure':self.unitOfMeasure or 'Unidad','minStockAlert':self.minStockAlert,
-                'baseCost':self.baseCost,'salePrice':self.salePrice,'physicalStock':self.physicalStock,
+                'baseCost':self.baseCost,'salePrice':self.salePrice,
+                'salePrice2':self.salePrice2 or 0.0,'salePrice3':self.salePrice3 or 0.0,
+                'physicalStock':self.physicalStock,
                 'reservedStock':self.reservedStock,'locationStock':loc,'stockByLocation':loc,
                 'createdAt':self.createdAt or '','updatedAt':self.updatedAt or ''}
 
@@ -334,6 +338,10 @@ def init_db():
                 conn.exec_driver_sql("ALTER TABLE products ADD COLUMN reference VARCHAR(200)")
             if 'supplier' not in existing_prod_cols:
                 conn.exec_driver_sql("ALTER TABLE products ADD COLUMN supplier VARCHAR(100)")
+            if 'salePrice2' not in existing_prod_cols:
+                conn.exec_driver_sql("ALTER TABLE products ADD COLUMN salePrice2 FLOAT DEFAULT 0")
+            if 'salePrice3' not in existing_prod_cols:
+                conn.exec_driver_sql("ALTER TABLE products ADD COLUMN salePrice3 FLOAT DEFAULT 0")
 
             conn.commit()
     except Exception as e:
@@ -478,6 +486,7 @@ def save_products():
             p.unitOfMeasure=pdata.get('unitOfMeasure',p.unitOfMeasure)
             p.minStockAlert=pdata.get('minStockAlert',p.minStockAlert)
             p.baseCost=pdata.get('baseCost',p.baseCost); p.salePrice=pdata.get('salePrice',p.salePrice)
+            p.salePrice2=pdata.get('salePrice2',p.salePrice2); p.salePrice3=pdata.get('salePrice3',p.salePrice3)
             p.physicalStock=pdata.get('physicalStock',p.physicalStock)
             p.reservedStock=pdata.get('reservedStock',p.reservedStock)
             p.locationStock=loc_str; p.updatedAt=now_iso()
@@ -489,8 +498,9 @@ def save_products():
                 supplier=pdata.get('supplier',''),
                 requiresSerial=pdata.get('requiresSerial',False),
                 unitOfMeasure=pdata.get('unitOfMeasure','Unidad'),
-                minStockAlert=pdata.get('minStockAlert',5),baseCost=pdata.get('baseCost',0),
-                salePrice=pdata.get('salePrice',0),physicalStock=pdata.get('physicalStock',0),
+                minStockAlert=pdata.get('minStockAlert',0),baseCost=pdata.get('baseCost',0),
+                salePrice=pdata.get('salePrice',0),salePrice2=pdata.get('salePrice2',0),
+                salePrice3=pdata.get('salePrice3',0),physicalStock=pdata.get('physicalStock',0),
                 reservedStock=pdata.get('reservedStock',0),locationStock=loc_str,
                 createdAt=pdata.get('createdAt',now_iso()[:10]),updatedAt=now_iso()))
     db.session.commit()

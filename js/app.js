@@ -111156,8 +111156,16 @@ function renderCatalog() {
             ${locationBreakdownHtml}
           </div>
         </td>
-        <td class="cost-column" style="font-size: 0.82rem; font-weight: 500;">$${p.baseCost.toFixed(2)}</td>
-        <td class="cost-column" style="font-size: 0.82rem; font-weight: 600; color: var(--accent-green);">$${p.salePrice.toFixed(2)}</td>
+        <td class="cost-column" style="font-size: 0.82rem; font-weight: 500;">
+          $${(p.baseCost || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+        </td>
+        <td class="cost-column" style="font-size: 0.82rem; font-weight: 600;">
+          <div style="color: var(--accent-green); font-weight: 700;">
+            $${(p.salePrice || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+          </div>
+          ${p.salePrice2 > 0 ? `<div style="font-size: 0.72rem; color: #93c5fd; font-weight: 500;" title="Precio de venta 2 (Mayorista)">P2: $${p.salePrice2.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>` : ''}
+          ${p.salePrice3 > 0 ? `<div style="font-size: 0.72rem; color: #fcd34d; font-weight: 500;" title="Precio de venta 3 (Especial)">P3: $${p.salePrice3.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>` : ''}
+        </td>
         <td style="text-align: center;">
           <div style="display: flex; gap: 0.3rem; justify-content: center; align-items: center; flex-wrap: wrap;">
             ${isAdminUser(appState.currentUser) ? `
@@ -113558,6 +113566,8 @@ function handleCreateProduct(e) {
   const minStock = parseInt(document.getElementById("newMinStock").value) || 0;
   const baseCost = parseFloat(document.getElementById("newBaseCost").value) || 0;
   const salePrice = parseFloat(document.getElementById("newSalePrice").value) || 0;
+  const salePrice2 = parseFloat(document.getElementById("newSalePrice2")?.value) || 0;
+  const salePrice3 = parseFloat(document.getElementById("newSalePrice3")?.value) || 0;
 
   if (!sku) {
     alert("⚠️ El código SKU del producto es obligatorio.");
@@ -113606,6 +113616,8 @@ function handleCreateProduct(e) {
     minStockAlert: minStock,
     baseCost,
     salePrice,
+    salePrice2,
+    salePrice3,
     physicalStock: 0,
     reservedStock: 0,
     warrantyMonths: reqSerial ? 12 : 0,
@@ -113650,19 +113662,40 @@ function openEditProductModal(productId) {
   if (document.getElementById("editReference")) {
     document.getElementById("editReference").value = product.reference || "";
   }
+  if (document.getElementById("editModalReference")) {
+    document.getElementById("editModalReference").value = product.reference || "";
+  }
   if (document.getElementById("editBrand")) {
     document.getElementById("editBrand").value = product.brand || "";
   }
+  if (document.getElementById("editModalBrand")) {
+    document.getElementById("editModalBrand").value = product.brand || "";
+  }
   if (document.getElementById("editSupplier")) {
     document.getElementById("editSupplier").value = product.supplier || "";
+  }
+  if (document.getElementById("editModalSupplier")) {
+    document.getElementById("editModalSupplier").value = product.supplier || "";
   }
   document.getElementById("editDescription").value = product.description || "";
   document.getElementById("editUnit").value = product.unitOfMeasure || "UNIDAD";
   document.getElementById("editBaseCost").value = (product.baseCost !== undefined) ? product.baseCost : 0;
   document.getElementById("editSalePrice").value = (product.salePrice !== undefined) ? product.salePrice : 0;
+  if (document.getElementById("editSalePrice2")) {
+    document.getElementById("editSalePrice2").value = (product.salePrice2 !== undefined) ? product.salePrice2 : 0;
+  }
+  if (document.getElementById("editModalSalePrice2")) {
+    document.getElementById("editModalSalePrice2").value = (product.salePrice2 !== undefined) ? product.salePrice2 : 0;
+  }
+  if (document.getElementById("editSalePrice3")) {
+    document.getElementById("editSalePrice3").value = (product.salePrice3 !== undefined) ? product.salePrice3 : 0;
+  }
+  if (document.getElementById("editModalSalePrice3")) {
+    document.getElementById("editModalSalePrice3").value = (product.salePrice3 !== undefined) ? product.salePrice3 : 0;
+  }
   document.getElementById("editPhysicalStock").value = (product.physicalStock !== undefined) ? product.physicalStock : 0;
   document.getElementById("editReservedStock").value = (product.reservedStock !== undefined) ? product.reservedStock : 0;
-  document.getElementById("editMinStock").value = (product.minStockAlert !== undefined) ? product.minStockAlert : 5;
+  document.getElementById("editMinStock").value = (product.minStockAlert !== undefined) ? product.minStockAlert : 0;
   document.getElementById("editWarrantyMonths").value = (product.warrantyMonths !== undefined) ? product.warrantyMonths : 0;
   document.getElementById("editReqSerial").value = product.requiresSerial ? "true" : "false";
 
@@ -113839,6 +113872,8 @@ function handleUpdateProduct(e) {
   const unitOfMeasure = document.getElementById("editUnit").value;
   const baseCost = parseFloat(document.getElementById("editBaseCost").value) || 0;
   const salePrice = parseFloat(document.getElementById("editSalePrice").value) || 0;
+  const salePrice2 = parseFloat(document.getElementById("editSalePrice2")?.value || document.getElementById("editModalSalePrice2")?.value) || 0;
+  const salePrice3 = parseFloat(document.getElementById("editSalePrice3")?.value || document.getElementById("editModalSalePrice3")?.value) || 0;
   const reservedStock = parseInt(document.getElementById("editReservedStock").value) || 0;
   const minStockAlert = parseInt(document.getElementById("editMinStock").value) || 0;
   const warrantyMonths = parseInt(document.getElementById("editWarrantyMonths").value) || 0;
@@ -113892,6 +113927,8 @@ function handleUpdateProduct(e) {
   product.unitOfMeasure = unitOfMeasure;
   product.baseCost = baseCost;
   product.salePrice = salePrice;
+  product.salePrice2 = salePrice2;
+  product.salePrice3 = salePrice3;
   product.physicalStock = physicalStock;
   product.reservedStock = reservedStock;
   product.minStockAlert = minStockAlert;
