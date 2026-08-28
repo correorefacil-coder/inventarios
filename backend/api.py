@@ -1326,9 +1326,9 @@ def process_sigo_upload():
     })
 
 # ==========================================================
-# RUTAS ESTÁTICAS Y SPA
+# RUTAS ESTÁTICAS Y SPA (CON PROTECCIÓN ESTRICTA DE SEGURIDAD)
 # ==========================================================
-from flask import send_from_directory
+from flask import send_from_directory, abort
 
 @app.route('/')
 def serve_index():
@@ -1337,9 +1337,42 @@ def serve_index():
 
 @app.route('/<path:path>')
 def serve_static(path):
+    # Protección de seguridad: sanitizar ruta y bloquear directory traversal
+    clean_path = os.path.normpath(path).replace('\\', '/')
+    
+    # 1. Bloquear cualquier intento de directory traversal
+    if '..' in clean_path or clean_path.startswith('/'):
+        abort(403)
+        
+    # 2. Bloquear archivos y carpetas ocultas (.env, .git, .vscode, etc.)
+    parts = clean_path.split('/')
+    if any(p.startswith('.') for p in parts):
+        abort(403)
+        
+    # 3. Bloquear extensiones sensibles y archivos de base de datos / secretos
+    forbidden_extensions = (
+        '.env', '.db', '.sqlite', '.sqlite3', '.db-journal', '.sqlite-journal',
+        '.py', '.pyc', '.pyo', '.pyd', '.sh', '.bat', '.cmd', '.ps1',
+        '.json', '.zip', '.tar', '.gz', '.7z', '.rar', '.log', '.bak', '.bk',
+        '.pem', '.key', '.cert', '.crt', '.config.js'
+    )
+    lower_path = clean_path.lower()
+    if lower_path.endswith(forbidden_extensions):
+        abort(403)
+        
+    # 4. Bloquear acceso a carpetas internas del backend
+    if parts[0] in ('backend', 'venv', '.venv', 'node_modules', '.git', 'backups', 'logs', 'uploads'):
+        abort(403)
+        
+    # 5. Whitelist de carpetas estáticas permitidas (css, js, assets) o archivos raíz autorizados
+    allowed_prefixes = ('css/', 'js/', 'assets/')
+    if not (clean_path.startswith(allowed_prefixes) or clean_path in ('index.html', 'favicon.ico', 'favicon.png', 'manifest.json', 'robots.txt')):
+        abort(404)
+
     project_root = os.path.dirname(BASE_DIR)
-    if os.path.exists(os.path.join(project_root, path)):
-        return send_from_directory(project_root, path)
+    file_full_path = os.path.join(project_root, clean_path)
+    if os.path.isfile(file_full_path):
+        return send_from_directory(project_root, clean_path)
     return jsonify({'error': 'Not found'}), 404
 
 if __name__ == '__main__':
