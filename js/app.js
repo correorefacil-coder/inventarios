@@ -103877,56 +103877,18 @@ async function saveAuditLogsToDisk() {
 
 function loadUsersFromDisk() {
   try {
-    let userList = null;
     const saved = localStorage.getItem("mascampo_users_db");
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        userList = parsed;
+        appState.users = parsed;
+        return;
       }
     }
-
-    const savedCustom = localStorage.getItem("mascampo_custom_users_db");
-    let customUsers = [];
-    if (savedCustom) {
-      const parsedCustom = JSON.parse(savedCustom);
-      if (Array.isArray(parsedCustom)) {
-        customUsers = parsedCustom;
-      }
-    }
-
-    if (!userList) {
-      userList = [...systemUsers];
-    }
-
-    // Merge custom users so none are ever lost
-    if (customUsers.length > 0) {
-      customUsers.forEach(cu => {
-        const existingIdx = userList.findIndex(u => u.id === cu.id || u.email.toLowerCase() === cu.email.toLowerCase());
-        if (existingIdx !== -1) {
-          userList[existingIdx] = { ...userList[existingIdx], ...cu };
-        } else {
-          userList.push(cu);
-        }
-      });
-    }
-
-    // Ensure system critical accounts always exist
-    systemUsers.forEach(su => {
-      const exists = userList.find(u => u.id === su.id || u.email.toLowerCase() === su.email.toLowerCase());
-      if (!exists) {
-        userList.unshift({ ...su });
-      }
-    });
-
-    appState.users = userList;
-    saveUsersToDisk();
-    return;
   } catch (e) {
     console.warn("No se pudo cargar la lista de usuarios de localStorage", e);
   }
   appState.users = [...systemUsers];
-  saveUsersToDisk();
 }
 
 async function saveUsersToDisk() {

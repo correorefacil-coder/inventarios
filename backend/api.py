@@ -435,6 +435,17 @@ def save_users():
     db.session.commit()
     return jsonify({'ok':True,'count':len(data)})
 
+@app.route('/api/users/<uid>', methods=['DELETE'])
+def delete_user(uid):
+    user = User.query.get(uid) or User.query.filter_by(email=uid).first()
+    if not user:
+        return jsonify({'error':'Usuario no encontrado'}), 404
+    if user.isSuperuser or user.email == 'gerencia@softproductiva.com':
+        return jsonify({'error':'No se puede eliminar el superadministrador'}), 403
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({'ok':True})
+
 @app.route('/api/products', methods=['GET'])
 def get_products(): return jsonify([p.to_dict() for p in Product.query.all()])
 
