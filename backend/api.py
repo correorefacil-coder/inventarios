@@ -404,11 +404,54 @@ def init_db():
             db.session.add(Category(name=c['name'],description=c['description'],
                 color=c['color'],createdAt=now_iso()[:10]))
 
+    # Cargar productos iniciales a SQLite si la tabla de productos está vacía
+    if Product.query.count() == 0:
+        prod_json_path = os.path.join(os.path.dirname(BASE_DIR), 'all_new_products.json')
+        if not os.path.exists(prod_json_path):
+            prod_json_path = os.path.join(BASE_DIR, 'all_new_products.json')
+        if os.path.exists(prod_json_path):
+            try:
+                with open(prod_json_path, 'r', encoding='utf-8') as f:
+                    raw_prods = json.load(f)
+                for pdata in raw_prods:
+                    pid = pdata.get('id') or gen_id()
+                    loc_st = pdata.get('stockByLocation') or pdata.get('locationStock') or {'loc-1': pdata.get('physicalStock', 0)}
+                    loc_str = json.dumps(loc_st) if isinstance(loc_st, dict) else str(loc_st or '{}')
+                    db.session.add(Product(
+                        id=pid,
+                        sku=pdata.get('sku', pid),
+                        barcode=pdata.get('barcode', ''),
+                        name=pdata.get('name', ''),
+                        reference=pdata.get('reference', ''),
+                        description=pdata.get('description', ''),
+                        category=pdata.get('category', ''),
+                        brand=pdata.get('brand', ''),
+                        supplier=pdata.get('supplier', ''),
+                        requiresSerial=bool(pdata.get('requiresSerial', False)),
+                        unitOfMeasure=pdata.get('unitOfMeasure', 'Unidad'),
+                        minStockAlert=int(pdata.get('minStockAlert', 0)),
+                        baseCost=float(pdata.get('baseCost', 0)),
+                        salePrice=float(pdata.get('salePrice', 0)),
+                        salePrice2=float(pdata.get('salePrice2', 0)),
+                        salePrice3=float(pdata.get('salePrice3', 0)),
+                        physicalStock=int(pdata.get('physicalStock', 0)),
+                        reservedStock=int(pdata.get('reservedStock', 0)),
+                        locationStock=loc_str,
+                        createdAt=pdata.get('createdAt', now_iso()[:10]),
+                        updatedAt=pdata.get('updatedAt', now_iso())
+                    ))
+                db.session.commit()
+                print(f"[*] Se sembraron {len(raw_prods)} productos en la BD SQLite.")
+            except Exception as pe:
+                print(f"[WARN] Error al sembrar productos en BD SQLite: {pe}")
+
     # Cargar clientes iniciales a SQLite si la tabla de clientes está vacía
     if Customer.query.count() == 0:
-        cust_json_path = os.path.join(os.path.dirname(BASE_DIR), 'all_excel_customers.json')
+        cust_json_path = os.path.join(BASE_DIR, 'initial_customers.json')
         if not os.path.exists(cust_json_path):
-            cust_json_path = os.path.join(BASE_DIR, 'all_excel_customers.json')
+            cust_json_path = os.path.join(os.path.dirname(BASE_DIR), 'initial_customers.json')
+        if not os.path.exists(cust_json_path):
+            cust_json_path = os.path.join(os.path.dirname(BASE_DIR), 'all_excel_customers.json')
         if os.path.exists(cust_json_path):
             try:
                 with open(cust_json_path, 'r', encoding='utf-8') as f:
@@ -432,6 +475,7 @@ def init_db():
                         extraData=json.dumps(extra, ensure_ascii=False),
                         createdAt=cdata.get('createdAt', now_iso()[:10])
                     ))
+                db.session.commit()
                 print(f"[*] Se migraron {len(raw_custs)} clientes a la BD SQLite.")
             except Exception as ce:
                 print(f"[WARN] Error al sembrar clientes en BD SQLite: {ce}")
