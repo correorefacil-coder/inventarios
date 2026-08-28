@@ -439,6 +439,10 @@ def init_db():
     db.session.commit()
     print(f"BD SQLite lista: {DB_PATH}")
 
+# Inicialización automática e inmediata de BD y migraciones en cualquier entorno (Gunicorn, PM2, Python)
+with app.app_context():
+    init_db()
+
 @app.route('/api/health')
 def health():
     return jsonify({'status':'ok','users':User.query.count(),'products':Product.query.count(),

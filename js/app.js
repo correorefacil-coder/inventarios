@@ -111787,7 +111787,7 @@ function renderMovementFilesPreview() {
   }).join('');
 }
 
-function handleCreateMovement(e) {
+async function handleCreateMovement(e) {
   e.preventDefault();
   const type = document.getElementById("movType").value;
   const prodId = document.getElementById("movProduct").value;
@@ -111947,9 +111947,11 @@ function handleCreateMovement(e) {
     }
   }
 
-  saveProductsToDisk();
-  saveMovementsToDisk();
-  saveSerializedItemsToDisk();
+  await Promise.all([
+    saveProductsToDisk(),
+    saveMovementsToDisk(),
+    saveSerializedItemsToDisk()
+  ]);
 
   addActivityLog("CREACION", "KardexMovement", `Registro de movimiento Kardex (${type}) para '${product.sku}'. Cant: ${qty}. Factura: ${invoice || 'N/A'}`);
 
@@ -114263,25 +114265,64 @@ async function savePendingIntakesToDisk() {
   }
 }
 
-// Configuración de URL base de la API:
-// Si corre en localhost sin puerto 5000 usa localhost:5000. Si está en un servidor remoto con reverse proxy (Nginx), usa '/api'.
-const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? (window.location.port === '8080' ? '/api' : 'http://localhost:8080/api')
-  : `${window.location.origin}/api`;
+// Configuración de URL base de la API con detección automática de entorno:
+let API_BASE = (() => {
+  if (typeof window === 'undefined') return 'http://localhost:8080/api';
+  const host = window.location.hostname;
+  const port = window.location.port;
+  const proto = window.location.protocol;
+  // Si se accede directamente al puerto 8080 del backend
+  if (port === '8080') return '/api';
+  // Si se accede en puerto estándar web (80 / 443 con Nginx reverse proxy)
+  if (port === '' || port === '80' || port === '443') return '/api';
+  // Si corre en localhost en puerto dev
+  if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:8080/api';
+  // Si se accede a IP remota en puerto no estándar
+  return `${proto}//${host}:8080/api`;
+})();
+
 let _backendOnline = null; // null=sin probar, true/false=resultado
 
 async function checkBackendOnline() {
-  if (_backendOnline !== null) return _backendOnline;
+  if (_backendOnline === true) return true;
+
+  // Intento 1: API_BASE configurada
   try {
-    const r = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(1500) });
-    _backendOnline = r.ok;
-  } catch { _backendOnline = false; }
-  if (!_backendOnline) {
-    console.warn('⚠️ Backend offline — datos en localStorage (temporal). Ejecute iniciar_backend.bat');
-  } else {
-    console.info('✅ Backend online — guardando en SQLite (mascampo.db)');
+    const r = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(2000) });
+    if (r.ok) {
+      _backendOnline = true;
+      return true;
+    }
+  } catch {}
+
+  // Intento 2 (Fallback): Ruta relativa '/api'
+  if (API_BASE !== '/api') {
+    try {
+      const r = await fetch(`/api/health`, { signal: AbortSignal.timeout(2000) });
+      if (r.ok) {
+        API_BASE = '/api';
+        _backendOnline = true;
+        return true;
+      }
+    } catch {}
   }
-  return _backendOnline;
+
+  // Intento 3 (Fallback): Puerto 8080 directo
+  const host8080 = `${window.location.protocol}//${window.location.hostname}:8080/api`;
+  if (API_BASE !== host8080) {
+    try {
+      const r = await fetch(`${host8080}/health`, { signal: AbortSignal.timeout(2000) });
+      if (r.ok) {
+        API_BASE = host8080;
+        _backendOnline = true;
+        return true;
+      }
+    } catch {}
+  }
+
+  _backendOnline = false;
+  console.warn(`⚠️ Backend offline en ${API_BASE}. Verifique que el servicio esté ejecutándose en el servidor.`);
+  return false;
 }
 
 async function _apiGet(endpoint) {
