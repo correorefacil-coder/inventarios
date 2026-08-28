@@ -103843,57 +103843,23 @@ function getClientIp() {
 }
 
 function loadPersistedAuditLogs() {
-  try {
-    const saved = localStorage.getItem("mascampo_audit_logs_db");
-
-    let logs = [];
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) logs = parsed;
-    }
-
-    // Keep all logs unlimitedly (excluding old hardcoded demo user logs)
-    appState.auditLogs = logs.filter(log => {
-      if (!log || !log.timestamp) return false;
-      if (log.userName === 'Carlos Mendoza' || log.userEmail === 'admin@mascampo.co' || (log.description && log.description.includes('admin@mascampo.co'))) {
-        return false;
-      }
-      return true;
-    });
-
-    saveAuditLogsToDisk();
-  } catch (e) {
-    console.warn("No se pudo cargar log persistido de auditoría", e);
-    appState.auditLogs = [];
-  }
+  // SQLite vía API es la única fuente de verdad
+  if (!appState.auditLogs) appState.auditLogs = [];
 }
 
 async function saveAuditLogsToDisk() {
-  try { localStorage.setItem("mascampo_audit_logs_db", JSON.stringify(appState.auditLogs)); } catch {}
   try {
     if (await checkBackendOnline()) await _apiPost('/audit-logs', appState.auditLogs.slice(0, 100));
   } catch (e) { console.warn('saveAuditLogsToDisk API:', e.message); }
 }
 
 function loadUsersFromDisk() {
-  try {
-    const saved = localStorage.getItem("mascampo_users_db");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        appState.users = parsed;
-        return;
-      }
-    }
-  } catch (e) {
-    console.warn("No se pudo cargar la lista de usuarios de localStorage", e);
-  }
+  // SQLite vía API es la única fuente de verdad
   appState.users = [...systemUsers];
 }
 
 async function saveUsersToDisk() {
   if (!appState.users || !Array.isArray(appState.users)) return;
-  try { localStorage.setItem("mascampo_users_db", JSON.stringify(appState.users)); } catch {}
   try {
     if (await checkBackendOnline()) await _apiPost('/users', appState.users);
   } catch (e) { console.warn('saveUsersToDisk API:', e.message); }
@@ -104462,6 +104428,14 @@ function saveSessionToStorage() {
 
 function loadSessionFromStorage() {
   try {
+    const legacyKeys = [
+      "mascampo_users_db", "mascampo_custom_users_db", "mascampo_products_db",
+      "mascampo_movements_db", "mascampo_reservations_db", "mascampo_serialized_items_db",
+      "mascampo_customers_db", "mascampo_custom_added_customers_db", "mascampo_locations_db",
+      "mascampo_categories_db", "mascampo_audit_logs_db", "mascampo_pending_intakes_db"
+    ];
+    legacyKeys.forEach(k => { try { localStorage.removeItem(k); } catch(e){} });
+
     const raw = localStorage.getItem(SESSION_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -110649,27 +110623,11 @@ const initialPendingIntakes = [
 ];
 
 function loadPersistedPendingIntakes() {
-  try {
-    const saved = localStorage.getItem("mascampo_pending_intakes_db");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
-        appState.pendingIntakes = parsed;
-        return;
-      }
-    }
-  } catch (e) {
-    console.warn("No se pudo cargar solicitudes de ingreso pendientes", e);
-  }
-  appState.pendingIntakes = [...initialPendingIntakes];
+  // SQLite vía API es la única fuente de verdad
+  if (!appState.pendingIntakes) appState.pendingIntakes = [];
 }
 
 async function savePendingIntakesToDisk() {
-  try {
-    localStorage.setItem("mascampo_pending_intakes_db", JSON.stringify(appState.pendingIntakes));
-  } catch (e) {
-    console.error("Error guardando ingresos pendientes en disco", e);
-  }
   try {
     if (await checkBackendOnline()) {
       await _apiPost('/pending-intakes', appState.pendingIntakes);
@@ -110812,131 +110770,53 @@ async function loadAllFromAPI(shouldRenderAll = true) {
 // ── PRODUCTOS ───────────────────────────────────────────────
 
 function loadProductsFromDisk() {
-  try {
-    const saved = localStorage.getItem("mascampo_products_db");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        appState.products = parsed;
-        return;
-      }
-    }
-  } catch (e) {
-    console.warn("No se pudo cargar productos de localStorage", e);
+  // SQLite vía API es la única fuente de verdad
+  if (!appState.products || appState.products.length === 0) {
+    appState.products = (typeof initialProducts !== 'undefined' && Array.isArray(initialProducts)) ? [...initialProducts] : [];
   }
 }
 
 async function saveProductsToDisk() {
-  try { localStorage.setItem("mascampo_products_db", JSON.stringify(appState.products)); } catch {}
   try {
     if (await checkBackendOnline()) await _apiPost('/products', appState.products);
   } catch (e) { console.warn('saveProductsToDisk API:', e.message); }
 }
 
 function loadMovementsFromDisk() {
-  try {
-    const saved = localStorage.getItem("mascampo_movements_db");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
-        parsed.forEach(m => {
-          if (m.attachments && Array.isArray(m.attachments)) {
-            m.attachments = m.attachments.filter(a => a.dataUrl || (a.name && !a.name.startsWith("Comprobante_")));
-          }
-        });
-        appState.movements = parsed;
-        return;
-      }
-    }
-  } catch (e) {
-    console.warn("No se pudo cargar movimientos del Kardex de localStorage", e);
-  }
+  // SQLite vía API es la única fuente de verdad
+  if (!appState.movements) appState.movements = [];
 }
 
 async function saveMovementsToDisk() {
-  try { localStorage.setItem("mascampo_movements_db", JSON.stringify(appState.movements)); } catch {}
   try {
     if (await checkBackendOnline()) await _apiPost('/movements', appState.movements);
   } catch (e) { console.warn('saveMovementsToDisk API:', e.message); }
 }
 
 function loadReservationsFromDisk() {
-  try {
-    const saved = localStorage.getItem("mascampo_reservations_db");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
-        appState.reservations = parsed;
-        return;
-      }
-    }
-  } catch (e) {
-    console.warn("No se pudo cargar reservas de localStorage", e);
-  }
+  // SQLite vía API es la única fuente de verdad
+  if (!appState.reservations) appState.reservations = [];
 }
 
 async function saveReservationsToDisk() {
-  try { localStorage.setItem("mascampo_reservations_db", JSON.stringify(appState.reservations)); } catch {}
   try {
     if (await checkBackendOnline()) await _apiPost('/reservations', appState.reservations);
   } catch (e) { console.warn('saveReservationsToDisk API:', e.message); }
 }
 
 function loadSerializedItemsFromDisk() {
-  try {
-    const saved = localStorage.getItem("mascampo_serialized_items_db");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        appState.serializedItems = parsed;
-        return;
-      }
-    }
-  } catch (e) {
-    console.warn("No se pudo cargar equipos serializados de localStorage", e);
-  }
+  // SQLite vía API es la única fuente de verdad
+  if (!appState.serializedItems) appState.serializedItems = [];
 }
 
 async function saveSerializedItemsToDisk() {
-  try { localStorage.setItem("mascampo_serialized_items_db", JSON.stringify(appState.serializedItems)); } catch {}
   try {
     if (await checkBackendOnline()) await _apiPost('/serialized-items', appState.serializedItems);
   } catch (e) { console.warn('saveSerializedItemsToDisk API:', e.message); }
 }
 
 function loadCustomersFromDisk() {
-  try {
-    const saved = localStorage.getItem("mascampo_customers_db");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        appState.customers = parsed;
-        return;
-      }
-    }
-    const userAdded = localStorage.getItem("mascampo_custom_added_customers_db");
-    if (userAdded) {
-      const addedParsed = JSON.parse(userAdded);
-      if (Array.isArray(addedParsed) && addedParsed.length > 0) {
-        const base = (typeof excelIngestedCustomers !== 'undefined' && Array.isArray(excelIngestedCustomers))
-          ? [...excelIngestedCustomers]
-          : [];
-        const existingIds = new Set(base.map(c => c.id));
-        addedParsed.forEach(c => {
-          if (existingIds.has(c.id)) {
-            const idx = base.findIndex(b => b.id === c.id);
-            if (idx !== -1) base[idx] = c;
-          } else {
-            base.unshift(c);
-          }
-        });
-        appState.customers = base;
-        return;
-      }
-    }
-  } catch (e) {
-    console.warn("No se pudo cargar clientes de localStorage", e);
-  }
+  // SQLite vía API es la única fuente de verdad
   if (!appState.customers || appState.customers.length === 0) {
     appState.customers = (typeof excelIngestedCustomers !== 'undefined' && Array.isArray(excelIngestedCustomers))
       ? [...excelIngestedCustomers]
@@ -110946,53 +110826,32 @@ function loadCustomersFromDisk() {
 
 async function saveCustomersToDisk() {
   if (!appState.customers || !Array.isArray(appState.customers)) return;
-  try { localStorage.setItem("mascampo_customers_db", JSON.stringify(appState.customers)); } catch {}
   try {
     if (await checkBackendOnline()) await _apiPost('/customers', appState.customers);
   } catch (e) { console.warn('saveCustomersToDisk API:', e.message); }
 }
 
 function loadLocationsFromDisk() {
-  try {
-    const saved = localStorage.getItem("mascampo_locations_db");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        appState.locations = parsed;
-        return;
-      }
-    }
-  } catch (e) {
-    console.warn("No se pudo cargar ubicaciones de localStorage", e);
-  }
+  // SQLite vía API es la única fuente de verdad
+  appState.locations = [...initialLocations];
 }
 
 async function saveLocationsToDisk() {
   if (!appState.locations || !Array.isArray(appState.locations)) return;
-  try { localStorage.setItem("mascampo_locations_db", JSON.stringify(appState.locations)); } catch {}
   try {
     if (await checkBackendOnline()) await _apiPost('/locations', appState.locations);
   } catch (e) { console.warn('saveLocationsToDisk API:', e.message); }
 }
 
 function loadCategoriesFromDisk() {
-  try {
-    const saved = localStorage.getItem("mascampo_categories_db");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        appState.categories = parsed;
-        return;
-      }
-    }
-  } catch (e) {
-    console.warn("No se pudo cargar categorías de localStorage", e);
+  // SQLite vía API es la única fuente de verdad
+  if (!appState.categories || appState.categories.length === 0) {
+    appState.categories = (typeof initialCategories !== 'undefined' && Array.isArray(initialCategories)) ? [...initialCategories] : [];
   }
 }
 
 async function saveCategoriesToDisk() {
   if (!appState.categories || !Array.isArray(appState.categories)) return;
-  try { localStorage.setItem("mascampo_categories_db", JSON.stringify(appState.categories)); } catch {}
   try {
     if (await checkBackendOnline()) await _apiPost('/categories', appState.categories);
   } catch (e) { console.warn('saveCategoriesToDisk API:', e.message); }
