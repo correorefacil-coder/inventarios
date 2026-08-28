@@ -418,10 +418,27 @@ def init_db():
                 address=u['address'],vinculacion=u['vinculacion'],document=u['document'],
                 active=u['active'],isSuperuser=u['isSuperuser'],
                 mustChangePassword=u['mustChangePassword'],createdAt=now_iso()[:10]))
-    for c in INITIAL_CATEGORIES:
-        if not Category.query.filter_by(name=c['name']).first():
-            db.session.add(Category(name=c['name'],description=c['description'],
-                color=c['color'],createdAt=now_iso()[:10]))
+    # Cargar y sincronizar todas las 25 categorías personalizadas
+    cat_json_path = os.path.join(BASE_DIR, 'initial_categories.json')
+    if not os.path.exists(cat_json_path):
+        cat_json_path = os.path.join(os.path.dirname(BASE_DIR), 'initial_categories.json')
+    if os.path.exists(cat_json_path):
+        try:
+            with open(cat_json_path, 'r', encoding='utf-8') as f:
+                raw_cats = json.load(f)
+            for cdata in raw_cats:
+                cname = str(cdata.get('name') or '').strip().upper()
+                if not cname: continue
+                if not Category.query.filter_by(name=cname).first():
+                    db.session.add(Category(
+                        name=cname,
+                        description=cdata.get('description', f'Categoría {cname}'),
+                        color=cdata.get('color', '#3b82f6'),
+                        createdAt=cdata.get('createdAt', now_iso()[:10])
+                    ))
+            db.session.commit()
+        except Exception as ce:
+            print(f"[WARN] Error al sembrar categorías en BD SQLite: {ce}")
 
     # Cargar y sincronizar precios de compra y venta desde all_new_products.json
     prod_json_path = os.path.join(os.path.dirname(BASE_DIR), 'all_new_products.json')

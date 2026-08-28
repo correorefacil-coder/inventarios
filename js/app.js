@@ -113972,9 +113972,12 @@ function openEditProductModal(productId) {
   // Populate Categories
   const categorySelect = document.getElementById("editCategory");
   if (categorySelect) {
-    categorySelect.innerHTML = appState.categories.map(c => 
-      `<option value="${c.id}" ${c.id === product.categoryId ? 'selected' : ''}>${c.name}</option>`
-    ).join('');
+    const currentCat = (product.category || product.categoryId || "").toString().trim().toUpperCase();
+    categorySelect.innerHTML = appState.categories.map(c => {
+      const cName = (c.name || "").toString().trim().toUpperCase();
+      const isSelected = (cName === currentCat || String(c.id) === String(product.categoryId) || String(c.id) === String(product.category));
+      return `<option value="${c.id}" ${isSelected ? 'selected' : ''}>${c.name}</option>`;
+    }).join('');
   }
 
   // Populate Stock by Location Container
