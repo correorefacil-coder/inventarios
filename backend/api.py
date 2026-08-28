@@ -65,9 +65,11 @@ class Product(db.Model):
     sku           = db.Column(db.String(100), unique=True, nullable=False)
     barcode       = db.Column(db.String(100))
     name          = db.Column(db.String(300), nullable=False)
+    reference     = db.Column(db.String(200))
     description   = db.Column(db.Text)
     category      = db.Column(db.String(100))
     brand         = db.Column(db.String(100))
+    supplier      = db.Column(db.String(100))
     requiresSerial= db.Column(db.Boolean, default=False)
     unitOfMeasure = db.Column(db.String(50))
     minStockAlert = db.Column(db.Integer, default=5)
@@ -84,8 +86,9 @@ class Product(db.Model):
             try: loc=json.loads(self.locationStock)
             except: loc={}
         return {'id':self.id,'sku':self.sku,'barcode':self.barcode or '','name':self.name,
-                'description':self.description or '','category':self.category or '',
-                'brand':self.brand or '','requiresSerial':self.requiresSerial,
+                'reference':self.reference or '','description':self.description or '',
+                'category':self.category or '','brand':self.brand or '',
+                'supplier':self.supplier or '','requiresSerial':self.requiresSerial,
                 'unitOfMeasure':self.unitOfMeasure or 'Unidad','minStockAlert':self.minStockAlert,
                 'baseCost':self.baseCost,'salePrice':self.salePrice,'physicalStock':self.physicalStock,
                 'reservedStock':self.reservedStock,'locationStock':loc,'stockByLocation':loc,
@@ -325,6 +328,13 @@ def init_db():
             if 'locationId' not in existing_res_cols:
                 conn.exec_driver_sql("ALTER TABLE reservations ADD COLUMN locationId VARCHAR(64)")
 
+            # Columnas nuevas de products
+            existing_prod_cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(products)").fetchall()}
+            if 'reference' not in existing_prod_cols:
+                conn.exec_driver_sql("ALTER TABLE products ADD COLUMN reference VARCHAR(200)")
+            if 'supplier' not in existing_prod_cols:
+                conn.exec_driver_sql("ALTER TABLE products ADD COLUMN supplier VARCHAR(100)")
+
             conn.commit()
     except Exception as e:
         print(f"[WARN] Error en migracion de columnas: {e}")
@@ -460,8 +470,10 @@ def save_products():
         p=Product.query.get(pid)
         if p:
             p.sku=pdata.get('sku',p.sku); p.barcode=pdata.get('barcode',p.barcode)
-            p.name=pdata.get('name',p.name); p.description=pdata.get('description',p.description)
+            p.name=pdata.get('name',p.name); p.reference=pdata.get('reference',p.reference)
+            p.description=pdata.get('description',p.description)
             p.category=pdata.get('category',p.category); p.brand=pdata.get('brand',p.brand)
+            p.supplier=pdata.get('supplier',p.supplier)
             p.requiresSerial=pdata.get('requiresSerial',p.requiresSerial)
             p.unitOfMeasure=pdata.get('unitOfMeasure',p.unitOfMeasure)
             p.minStockAlert=pdata.get('minStockAlert',p.minStockAlert)
@@ -471,8 +483,10 @@ def save_products():
             p.locationStock=loc_str; p.updatedAt=now_iso()
         else:
             db.session.add(Product(id=pid,sku=pdata.get('sku',pid),barcode=pdata.get('barcode',''),
-                name=pdata.get('name',''),description=pdata.get('description',''),
+                name=pdata.get('name',''),reference=pdata.get('reference',''),
+                description=pdata.get('description',''),
                 category=pdata.get('category',''),brand=pdata.get('brand',''),
+                supplier=pdata.get('supplier',''),
                 requiresSerial=pdata.get('requiresSerial',False),
                 unitOfMeasure=pdata.get('unitOfMeasure','Unidad'),
                 minStockAlert=pdata.get('minStockAlert',5),baseCost=pdata.get('baseCost',0),
