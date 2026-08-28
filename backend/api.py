@@ -487,8 +487,23 @@ def init_db():
 with app.app_context():
     init_db()
 
+@app.route('/api/seed-database', methods=['GET', 'POST'])
+def seed_database():
+    with app.app_context():
+        init_db()
+    return jsonify({
+        'status': 'ok',
+        'products': Product.query.count(),
+        'customers': Customer.query.count(),
+        'users': User.query.count(),
+        'categories': Category.query.count()
+    })
+
 @app.route('/api/health')
 def health():
+    # Si la base de datos no tiene productos ni clientes, disparar siembra automática
+    if Product.query.count() == 0 or Customer.query.count() == 0:
+        init_db()
     return jsonify({'status':'ok','users':User.query.count(),'products':Product.query.count(),
                     'movements':Movement.query.count(),'customers':Customer.query.count(),
                     'db':DB_PATH,'timestamp':now_iso()})
