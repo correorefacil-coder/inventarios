@@ -459,10 +459,15 @@ def init_db():
                 sku = str(pdata.get('sku') or '').strip().upper()
                 p = prod_by_id.get(pid) or prod_by_sku.get(sku)
                 if p:
-                    p.baseCost = float(pdata.get('baseCost', 0))
-                    p.salePrice = float(pdata.get('salePrice', 0))
-                    p.salePrice2 = float(pdata.get('salePrice2', 0))
-                    p.salePrice3 = float(pdata.get('salePrice3', 0))
+                    # En producción: solo llenar precios/costos si estaban en 0 para no sobreescribir ediciones manuales
+                    if (not p.baseCost or p.baseCost == 0) and pdata.get('baseCost'):
+                        p.baseCost = float(pdata.get('baseCost', 0))
+                    if (not p.salePrice or p.salePrice == 0) and pdata.get('salePrice'):
+                        p.salePrice = float(pdata.get('salePrice', 0))
+                    if (not p.salePrice2 or p.salePrice2 == 0) and pdata.get('salePrice2'):
+                        p.salePrice2 = float(pdata.get('salePrice2', 0))
+                    if (not p.salePrice3 or p.salePrice3 == 0) and pdata.get('salePrice3'):
+                        p.salePrice3 = float(pdata.get('salePrice3', 0))
                     if not p.reference and pdata.get('reference'): p.reference = pdata.get('reference')
                     if not p.supplier and pdata.get('supplier'): p.supplier = pdata.get('supplier')
                     updated_count += 1
