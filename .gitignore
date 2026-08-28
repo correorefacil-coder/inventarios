@@ -31,3 +31,8 @@ Thumbs.db
 # Python
 __pycache__/
 *.py[cod]
+
+# Temp locks & uploads
+.~lock.*
+*.db.bk
+backend/uploads/

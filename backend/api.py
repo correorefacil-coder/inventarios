@@ -10,10 +10,13 @@ Base de datos: backend/mascampo.db (archivo fisico en disco)
 import os
 import json
 import uuid
-from datetime import datetime
-from flask import Flask, request, jsonify
+import re
+from datetime import datetime, date
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
+from werkzeug.utils import secure_filename
+import openpyxl
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'mascampo.db')
@@ -115,6 +118,7 @@ class Movement(db.Model):
     toLocationId  = db.Column(db.String(64))
     attachments   = db.Column(db.Text)
     date          = db.Column(db.String(30))
+    movementDate  = db.Column(db.String(30))
     def to_dict(self):
         att=[]
         if self.attachments:
@@ -125,7 +129,8 @@ class Movement(db.Model):
                 'customerName':self.customerName or '','serialNumber':self.serialNumber or '',
                 'notes':self.notes or '','user':self.userId or '','userId':self.userId or '',
                 'locationId':self.locationId or '','fromLocationId':self.fromLocationId or '',
-                'toLocationId':self.toLocationId or '','attachments':att,'date':self.date or ''}
+                'toLocationId':self.toLocationId or '','attachments':att,
+                'date':self.date or '','movementDate':self.movementDate or (self.date[:10] if self.date else '')}
 
 class Location(db.Model):
     __tablename__ = 'locations'
@@ -287,6 +292,45 @@ class SystemSetting(db.Model):
     def to_dict(self):
         return {'key': self.key, 'value': self.value, 'updatedAt': self.updatedAt or ''}
 
+class SigoUpload(db.Model):
+    __tablename__ = 'sigo_uploads'
+    id                   = db.Column(db.String(64), primary_key=True)
+    originalFilename     = db.Column(db.String(300), nullable=False)
+    savedFilename        = db.Column(db.String(300), nullable=False)
+    filePath             = db.Column(db.String(500), nullable=False)
+    fileSize             = db.Column(db.Integer, default=0)
+    uploadedAt           = db.Column(db.String(30))
+    userId               = db.Column(db.String(64))
+    userName             = db.Column(db.String(200))
+    userEmail            = db.Column(db.String(200))
+    totalRows            = db.Column(db.Integer, default=0)
+    processedCount       = db.Column(db.Integer, default=0)
+    duplicateCount       = db.Column(db.Integer, default=0)
+    newCustomersCount    = db.Column(db.Integer, default=0)
+    skippedProductsCount = db.Column(db.Integer, default=0)
+    reportJson           = db.Column(db.Text)
+    def to_dict(self):
+        rep = {}
+        if self.reportJson:
+            try: rep = json.loads(self.reportJson)
+            except: rep = {}
+        return {
+            'id': self.id,
+            'originalFilename': self.originalFilename,
+            'savedFilename': self.savedFilename,
+            'fileSize': self.fileSize,
+            'uploadedAt': self.uploadedAt or '',
+            'userId': self.userId or '',
+            'userName': self.userName or '',
+            'userEmail': self.userEmail or '',
+            'totalRows': self.totalRows,
+            'processedCount': self.processedCount,
+            'duplicateCount': self.duplicateCount,
+            'newCustomersCount': self.newCustomersCount,
+            'skippedProductsCount': self.skippedProductsCount,
+            'report': rep
+        }
+
 SALT = '$'
 INITIAL_USERS = [
     {'id':'usr-super','firstName':'Superusuario','lastName':'Gerencia','email':'gerencia@softproductiva.com',
@@ -321,7 +365,8 @@ def init_db():
                 'fromLocationId': 'VARCHAR(64)',
                 'toLocationId': 'VARCHAR(64)',
                 'notes': 'TEXT',
-                'attachments': 'TEXT'
+                'attachments': 'TEXT',
+                'movementDate': 'VARCHAR(30)'
             }
             for col, col_type in mov_new_cols.items():
                 if col not in existing_mov_cols:
@@ -525,7 +570,9 @@ def save_movements():
                 locationId=mdata.get('locationId',''),
                 fromLocationId=mdata.get('fromLocationId',''),
                 toLocationId=mdata.get('toLocationId',''),
-                attachments=json.dumps(mdata.get('attachments',[])),date=mdata.get('date',now_iso())))
+                attachments=json.dumps(mdata.get('attachments',[])),
+                date=mdata.get('date',now_iso()),
+                movementDate=mdata.get('movementDate', mdata.get('date', now_iso()[:10])[:10])))
     db.session.commit()
     return jsonify({'ok':True,'count':len(data)})
 
@@ -736,6 +783,350 @@ def save_settings():
     db.session.commit()
     return jsonify({'ok': True})
 
+# ==========================================================
+# ENDPOINTS: INGESTA AUTOMÁTICA CIERRE DE VENTAS SIGO
+# ==========================================================
+
+SIGO_UPLOADS_DIR = os.path.join(BASE_DIR, 'uploads', 'sigo_files')
+os.makedirs(SIGO_UPLOADS_DIR, exist_ok=True)
+
+@app.route('/api/sigo/uploads', methods=['GET'])
+def get_sigo_uploads():
+    uploads = SigoUpload.query.order_by(SigoUpload.uploadedAt.desc()).all()
+    return jsonify([u.to_dict() for u in uploads])
+
+@app.route('/api/sigo/download/<upload_id>', methods=['GET'])
+def download_sigo_upload(upload_id):
+    up = SigoUpload.query.get(upload_id)
+    if not up:
+        # Check by saved filename
+        up = SigoUpload.query.filter_by(savedFilename=upload_id).first()
+    if not up or not os.path.exists(up.filePath):
+        return jsonify({'error': 'Archivo no encontrado'}), 404
+    return send_file(up.filePath, as_attachment=True, download_name=up.originalFilename)
+
+@app.route('/api/sigo/report/<upload_id>', methods=['GET'])
+def get_sigo_report(upload_id):
+    up = SigoUpload.query.get(upload_id)
+    if not up:
+        return jsonify({'error': 'Registro de carga no encontrado'}), 404
+    return jsonify(up.to_dict())
+
+@app.route('/api/sigo/upload', methods=['POST'])
+def process_sigo_upload():
+    if 'file' not in request.files:
+        return jsonify({'ok': False, 'error': 'No se recibió ningún archivo.'}), 400
+
+    file = request.files['file']
+    if not file or not file.filename:
+        return jsonify({'ok': False, 'error': 'Nombre de archivo inválido.'}), 400
+
+    user_id = request.form.get('userId', '')
+    user_name = request.form.get('userName', 'Administrador')
+    user_email = request.form.get('userEmail', '')
+
+    orig_name = file.filename
+    clean_orig_name = secure_filename(orig_name) or 'cierre_sigo.xlsx'
+    base_name, ext = os.path.splitext(clean_orig_name)
+    if not ext: ext = '.xlsx'
+
+    # Safe renaming if file with same name already exists in server
+    saved_name = clean_orig_name
+    target_path = os.path.join(SIGO_UPLOADS_DIR, saved_name)
+    counter = 1
+    while os.path.exists(target_path):
+        saved_name = f"{base_name}_{counter}{ext}"
+        target_path = os.path.join(SIGO_UPLOADS_DIR, saved_name)
+        counter += 1
+
+    file.save(target_path)
+    file_size = os.path.getsize(target_path)
+
+    # Parse Excel with openpyxl
+    try:
+        wb = openpyxl.load_workbook(target_path, data_only=True)
+        ws = wb.active
+    except Exception as e:
+        return jsonify({
+            'ok': False,
+            'error': f'No se pudo abrir el archivo Excel. Asegúrese de que sea un archivo .xlsx válido: {str(e)}'
+        }), 400
+
+    # Locate Header Row
+    header_row_idx = None
+    header_map = {}
+    for r in range(1, min(25, ws.max_row + 1)):
+        row_vals = [c.value for c in ws[r]]
+        row_strs = [str(v).lower().strip() for v in row_vals if v is not None]
+        # Check if row looks like Siigo headers
+        if any('comprobante' in s for s in row_strs) and (any('consecutivo' in s for s in row_strs) or any('tercero' in s for s in row_strs) or any('identificaci' in s for s in row_strs)):
+            header_row_idx = r
+            for idx, val in enumerate(row_vals):
+                if val:
+                    header_map[str(val).strip()] = idx
+            break
+
+    if not header_row_idx:
+        return jsonify({
+            'ok': False,
+            'error': 'El archivo no contiene la estructura esperada de Siigo (Faltan columnas de Comprobante, Consecutivo, Identificación, etc.).'
+        }), 400
+
+    # Helper function to get cell value by column name variants
+    def get_val(row_cells, *candidates):
+        for c in candidates:
+            if c in header_map:
+                idx = header_map[c]
+                if idx < len(row_cells):
+                    return row_cells[idx].value
+            # case insensitive match
+            for h, idx in header_map.items():
+                if any(cand.lower() in h.lower() for cand in candidates):
+                    if idx < len(row_cells):
+                        return row_cells[idx].value
+        return None
+
+    # Load caches from DB
+    db_products = {str(p.sku).replace(' ', '').upper().strip(): p for p in Product.query.all()}
+    
+    db_customers_by_doc = {}
+    db_customers_by_name = {}
+    for c in Customer.query.all():
+        doc_c = re.sub(r'[^0-9A-Za-z]', '', str(c.documentNum or '')).strip()
+        if doc_c: db_customers_by_doc[doc_c] = c
+        if c.name: db_customers_by_name[c.name.lower().strip()] = c
+
+    existing_movements = set()
+    for m in Movement.query.all():
+        inv_c = str(m.invoiceNumber or '').upper().strip()
+        cid_c = str(m.customerId or '').strip()
+        cname_c = str(m.customerName or '').lower().strip()
+        existing_movements.add((m.productId, inv_c, cid_c))
+        existing_movements.add((m.productId, inv_c, cname_c))
+
+    upload_id = f"sigo-up-{gen_id()}"
+    processed_list = []
+    duplicate_list = []
+    new_customers_list = []
+    skipped_products_list = []
+    seen_in_batch = set()
+
+    for r in range(header_row_idx + 1, ws.max_row + 1):
+        row_cells = ws[r]
+        vals = [c.value for c in row_cells]
+        if not any(vals): continue
+
+        t_clas = str(get_val(row_cells, 'Tipo clasificación', 'Tipo clasificacion') or '').strip()
+        # Siigo product rows have 'Producto'
+        if t_clas.lower() != 'producto':
+            continue
+
+        raw_code = str(get_val(row_cells, 'Código', 'Codigo') or '').strip()
+        if not raw_code or raw_code.lower() == 'none':
+            continue
+
+        clean_sku = raw_code.replace(' ', '').upper().strip()
+        prod_name_file = str(get_val(row_cells, 'Nombre') or '').strip()
+
+        comprobante = str(get_val(row_cells, 'Número comprobante', 'Numero comprobante') or '').strip()
+        consecutivo = str(get_val(row_cells, 'Consecutivo') or '').strip()
+        factura = f"{comprobante}-{consecutivo}" if comprobante and consecutivo else (comprobante or consecutivo or 'S/F')
+
+        nit_raw = str(get_val(row_cells, 'Identificación', 'Identificacion') or '').strip()
+        nit_clean = re.sub(r'[^0-9A-Za-z]', '', nit_raw)
+        cliente_nombre = str(get_val(row_cells, 'Nombre tercero') or '').strip() or 'Cliente Sin Nombre'
+        email = str(get_val(row_cells, 'Correo electrónico', 'Correo electronico') or '').strip()
+        contacto = str(get_val(row_cells, 'Nombre contacto') or '').strip()
+
+        fecha_val = get_val(row_cells, 'Fecha elaboración', 'Fecha elaboracion', 'Fecha creación', 'Fecha creacion')
+        if isinstance(fecha_val, (datetime, date)):
+            fecha_mov = fecha_val.strftime('%Y-%m-%d')
+        else:
+            fecha_mov = str(fecha_val or '')[:10] if fecha_val else now_iso()[:10]
+
+        try: cant = int(float(get_val(row_cells, 'Cantidad') or 1))
+        except: cant = 1
+
+        try: val_unit = float(get_val(row_cells, 'Valor unitario') or 0)
+        except: val_unit = 0.0
+
+        try: total_val = float(get_val(row_cells, 'Total') or (cant * val_unit))
+        except: total_val = cant * val_unit
+
+        # 1. Check Product in Catalog
+        if clean_sku not in db_products:
+            skipped_products_list.append({
+                'row': r,
+                'sku': raw_code,
+                'productName': prod_name_file or 'No identificado',
+                'quantity': cant,
+                'invoice': factura,
+                'customer': cliente_nombre,
+                'reason': f"El producto con SKU '{raw_code}' no existe en el catálogo de inventario. (No se crean productos automáticamente)."
+            })
+            continue
+
+        product = db_products[clean_sku]
+
+        # 2. Check / Auto-Create Customer
+        customer = None
+        if nit_clean and nit_clean in db_customers_by_doc:
+            customer = db_customers_by_doc[nit_clean]
+        elif cliente_nombre.lower().strip() in db_customers_by_name:
+            customer = db_customers_by_name[cliente_nombre.lower().strip()]
+
+        if not customer:
+            new_cust_id = f"cust-{gen_id()}"
+            doc_type = 'NIT' if len(nit_clean) >= 9 else 'CC'
+            customer = Customer(
+                id=new_cust_id,
+                documentType=doc_type,
+                documentTypeAbbr=doc_type,
+                documentNum=nit_clean,
+                name=cliente_nombre,
+                phone='',
+                email=email,
+                city='Auto-creado vía Cierre Sigo',
+                address='Cierre de Ventas Sigo',
+                createdAt=now_iso()[:10]
+            )
+            db.session.add(customer)
+            if nit_clean: db_customers_by_doc[nit_clean] = customer
+            db_customers_by_name[cliente_nombre.lower().strip()] = customer
+            new_customers_list.append({
+                'document': nit_clean,
+                'name': cliente_nombre,
+                'contact': contacto,
+                'email': email
+            })
+
+        # 3. Deduplication Check: Product + Invoice + Customer
+        dedup_key = (product.id, factura.upper().strip(), customer.id)
+        dedup_key_name = (product.id, factura.upper().strip(), customer.name.lower().strip())
+        batch_key = (clean_sku, factura.upper().strip(), customer.id)
+
+        if dedup_key in existing_movements or dedup_key_name in existing_movements or batch_key in seen_in_batch:
+            duplicate_list.append({
+                'row': r,
+                'sku': product.sku,
+                'productName': product.name,
+                'invoice': factura,
+                'customer': customer.name,
+                'document': nit_clean,
+                'quantity': cant,
+                'movementDate': fecha_mov,
+                'reason': f"Ya existe un movimiento de salida registrado para la Factura '{factura}', producto '{product.sku}' y cliente '{customer.name}'."
+            })
+            continue
+
+        seen_in_batch.add(batch_key)
+        existing_movements.add(dedup_key)
+
+        # 4. Valid Movement: Deduct Stock & Record Kardex Movement
+        product.physicalStock = max(0, product.physicalStock - cant)
+        loc_stock = {}
+        if product.locationStock:
+            try: loc_stock = json.loads(product.locationStock)
+            except: loc_stock = {}
+        loc_stock['loc-1'] = max(0, loc_stock.get('loc-1', 0) - cant)
+        product.locationStock = json.dumps(loc_stock)
+        product.updatedAt = now_iso()
+
+        # Handle Serialized Items if applicable
+        if product.requiresSerial:
+            avail_serial = SerializedItem.query.filter_by(productId=product.id, status='EN_STOCK').first()
+            if avail_serial:
+                avail_serial.status = 'VENDIDO'
+                avail_serial.currentCustomerId = customer.id
+                avail_serial.saleDate = fecha_mov
+                avail_serial.invoiceNumber = factura
+                avail_serial.updatedAt = now_iso()
+
+        mov_id = f"mov-sigo-{gen_id()}"
+        mov = Movement(
+            id=mov_id,
+            type='SALIDA_VENTA',
+            productId=product.id,
+            quantity=cant,
+            invoiceNumber=factura,
+            customerId=customer.id,
+            customerName=customer.name,
+            serialNumber='',
+            notes=f"Salida automática por cierre de ventas Sigo (Factura {factura}, Archivo: {orig_name})",
+            userId=user_name,
+            locationId='loc-1',
+            fromLocationId='loc-1',
+            toLocationId='',
+            attachments=json.dumps([{'name': saved_name, 'type': 'excel', 'icon': '📊', 'uploadId': upload_id}]),
+            date=now_iso(),
+            movementDate=fecha_mov
+        )
+        db.session.add(mov)
+
+        processed_list.append({
+            'row': r,
+            'sku': product.sku,
+            'productName': product.name,
+            'productId': product.id,
+            'invoice': factura,
+            'customer': customer.name,
+            'customerId': customer.id,
+            'document': nit_clean,
+            'quantity': cant,
+            'movementDate': fecha_mov,
+            'total': total_val
+        })
+
+    # Prepare Report Summary
+    total_product_rows = len(processed_list) + len(duplicate_list) + len(skipped_products_list)
+    report_data = {
+        'uploadId': upload_id,
+        'originalFilename': orig_name,
+        'savedFilename': saved_name,
+        'fileSize': file_size,
+        'uploadedAt': now_iso(),
+        'userName': user_name,
+        'userEmail': user_email,
+        'totalProductRows': total_product_rows,
+        'processedCount': len(processed_list),
+        'duplicateCount': len(duplicate_list),
+        'newCustomersCount': len(new_customers_list),
+        'skippedProductsCount': len(skipped_products_list),
+        'processedList': processed_list,
+        'duplicateList': duplicate_list,
+        'newCustomersList': new_customers_list,
+        'skippedProductsList': skipped_products_list
+    }
+
+    sigo_up = SigoUpload(
+        id=upload_id,
+        originalFilename=orig_name,
+        savedFilename=saved_name,
+        filePath=target_path,
+        fileSize=file_size,
+        uploadedAt=now_iso(),
+        userId=user_id,
+        userName=user_name,
+        userEmail=user_email,
+        totalRows=total_product_rows,
+        processedCount=len(processed_list),
+        duplicateCount=len(duplicate_list),
+        newCustomersCount=len(new_customers_list),
+        skippedProductsCount=len(skipped_products_list),
+        reportJson=json.dumps(report_data, ensure_ascii=False)
+    )
+    db.session.add(sigo_up)
+    db.session.commit()
+
+    return jsonify({
+        'ok': True,
+        'uploadId': upload_id,
+        'report': report_data
+    })
+
+# ==========================================================
+# RUTAS ESTÁTICAS Y SPA
+# ==========================================================
 from flask import send_from_directory
 
 @app.route('/')

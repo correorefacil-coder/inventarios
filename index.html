@@ -108,7 +108,7 @@
         <a class="drawer-nav-link active" data-view="view-dashboard" onclick="switchViewFromDrawer('view-dashboard')">
           <span class="icon">📊</span> Dashboard & KPIs
         </a>
-        <a class="drawer-nav-link admin-only" id="mobileDrawerSigoLink" onclick="triggerSigoReportImport(); closeMobileDrawer();" title="Cargar Cierre de Ventas Sigo (Auto)">
+        <a class="drawer-nav-link admin-only" data-view="view-sigo-intake" id="mobileDrawerSigoLink" onclick="switchViewFromDrawer('view-sigo-intake')" title="Cargar Cierre de Ventas Sigo (Auto)">
           <span class="icon">⚡</span> <span>Cargar Cierre Ventas Sigo</span>
         </a>
         <a class="drawer-nav-link" data-view="view-catalog" onclick="switchViewFromDrawer('view-catalog')">
@@ -237,7 +237,7 @@
         <a class="nav-link active" data-view="view-dashboard">
           <span class="icon">📊</span> <span>Dashboard & KPIs</span>
         </a>
-        <a class="nav-link admin-only" id="sidebarSigoLink" onclick="triggerSigoReportImport();" title="Cargar Cierre de Ventas Sigo (Auto)">
+        <a class="nav-link admin-only" data-view="view-sigo-intake" id="sidebarSigoLink" title="Cargar Cierre de Ventas Sigo (Auto)">
           <span class="icon">⚡</span> <span>Cargar Cierre Ventas Sigo</span>
         </a>
         <a class="nav-link" data-view="view-catalog">
@@ -283,8 +283,8 @@
           <span style="color: #6ee7b7; font-size: 0.85rem; font-weight: 500;">
             ⚡ <strong>Motor de Ingesta Automática Sigo Activo</strong>: Cargue su reporte de cierre de caja en 1 clic. El sistema creará los clientes nuevos y descontará el inventario automáticamente.
           </span>
-          <button class="btn btn-primary" onclick="triggerSigoReportImport()" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
-            Cargar Cierre de Caja Sigo
+          <button class="btn btn-primary" onclick="switchView('view-sigo-intake')" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">
+            Ir al Módulo de Cierre Sigo
           </button>
         </div>
 
@@ -376,6 +376,217 @@
             </div>
             <div class="audit-box" id="auditLogBox">
               <!-- JS -->
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW: CARGAR CIERRE VENTAS SIGO & HISTORIAL -->
+        <!-- ========================================== -->
+        <section id="view-sigo-intake" class="view-section">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">⚡ Ingesta Automática de Cierre de Ventas Sigo (Excel / XLSX)</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">
+                Cargue su reporte de ventas de Sigo para generar salidas automáticas en Kardex, deduplicación inteligente, auto-creación de clientes y consulta de archivos históricos.
+              </p>
+            </div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="btn btn-secondary" onclick="loadSigoUploadsHistory()" style="font-size: 0.82rem; padding: 0.35rem 0.75rem;">
+                🔄 Refrescar Historial
+              </button>
+            </div>
+          </div>
+
+          <!-- Panel 1: Drag and Drop Upload Area -->
+          <div class="panel" style="border: 2px dashed rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.04); text-align: center; padding: 2rem 1.5rem; margin-bottom: 1.5rem; border-radius: var(--radius-lg);">
+            <div style="font-size: 3rem; margin-bottom: 0.5rem;">📊</div>
+            <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--accent-green); margin-bottom: 0.4rem;">
+              Subir Reporte Oficial de Ventas Sigo (.xlsx / .xls)
+            </h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); max-width: 600px; margin: 0 auto 1.25rem auto; line-height: 1.5;">
+              Seleccione el archivo exportado de Sigo (ej: <code>Movimiento ventas y compras-*.xlsx</code>). El sistema cruzará automáticamente las facturas, creará los clientes no registrados y descontará las existencias en Kardex.
+            </p>
+
+            <input type="file" id="sigoFileUploadInput" accept=".xlsx, .xls" style="display: none;" onchange="handleSigoFileSelection(this)">
+            
+            <div style="display: flex; justify-content: center; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+              <button type="button" class="btn btn-primary" onclick="document.getElementById('sigoFileUploadInput').click()" style="padding: 0.6rem 1.4rem; font-size: 0.92rem; font-weight: 600;">
+                📂 Seleccionar Archivo Excel (.xlsx)
+              </button>
+            </div>
+
+            <!-- Selected File Info & Process Action -->
+            <div id="sigoSelectedFileInfo" style="display: none; margin-top: 1.25rem; padding: 1rem; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border-color); border-radius: var(--radius-md); max-width: 550px; margin-left: auto; margin-right: auto;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.75rem;">
+                <div style="text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  <strong id="sigoSelectedFileName" style="color: var(--accent-green); font-size: 0.9rem;">archivo.xlsx</strong>
+                  <div id="sigoSelectedFileSize" style="font-size: 0.75rem; color: var(--text-muted);">0 KB</div>
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="clearSelectedSigoFile()" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">✕ Quitar</button>
+              </div>
+
+              <button type="button" id="btnProcessSigoUpload" class="btn btn-primary" onclick="executeSigoUpload()" style="width: 100%; padding: 0.6rem; font-weight: 700; font-size: 0.92rem; background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                ⚡ Procesar e Importar Cierre a Kardex
+              </button>
+            </div>
+
+            <!-- Uploading Spinner / Progress -->
+            <div id="sigoUploadSpinner" style="display: none; margin-top: 1.25rem; color: var(--accent-green); font-weight: 600; font-size: 0.9rem;">
+              ⏳ Procesando y validando líneas de venta contra el catálogo... Por favor espere.
+            </div>
+          </div>
+
+          <!-- Panel 2: Live Ingestion Audit Report (Renders when upload finishes or viewed from history) -->
+          <div id="sigoReportPanel" class="panel" style="display: none; margin-bottom: 1.5rem; border: 1px solid var(--border-highlight); background: rgba(15, 23, 42, 0.95);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+              <div>
+                <h3 id="sigoReportTitle" style="font-size: 1.1rem; font-weight: 700; color: var(--text-main); margin: 0;">
+                  📋 Informe de Auditoría y Procesamiento de Cierre Sigo
+                </h3>
+                <div id="sigoReportSubtitle" style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;"></div>
+              </div>
+              <button class="btn btn-secondary" onclick="document.getElementById('sigoReportPanel').style.display='none'" style="padding: 0.25rem 0.6rem; font-size: 0.78rem;">
+                ✕ Cerrar Informe
+              </button>
+            </div>
+
+            <!-- Summary Metric Badges Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem;">
+              <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); padding: 0.85rem; border-radius: var(--radius-md); text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Cargados Correctamente</div>
+                <div id="repMetricProcessed" style="font-size: 1.6rem; font-weight: 800; color: var(--accent-green); margin-top: 0.2rem;">0</div>
+                <div style="font-size: 0.72rem; color: #a7f3d0;">Salidas registradas en Kardex</div>
+              </div>
+
+              <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); padding: 0.85rem; border-radius: var(--radius-md); text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Duplicados Omitidos</div>
+                <div id="repMetricDuplicates" style="font-size: 1.6rem; font-weight: 800; color: var(--accent-amber); margin-top: 0.2rem;">0</div>
+                <div style="font-size: 0.72rem; color: #fde68a;">Factura + Producto ya existían</div>
+              </div>
+
+              <div style="background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); padding: 0.85rem; border-radius: var(--radius-md); text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Clientes Nuevos Creados</div>
+                <div id="repMetricCustomers" style="font-size: 1.6rem; font-weight: 800; color: #60a5fa; margin-top: 0.2rem;">0</div>
+                <div style="font-size: 0.72rem; color: #bfdbfe;">Añadidos a base de clientes</div>
+              </div>
+
+              <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); padding: 0.85rem; border-radius: var(--radius-md); text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Omitidos (Sin Producto)</div>
+                <div id="repMetricSkipped" style="font-size: 1.6rem; font-weight: 800; color: #f87171; margin-top: 0.2rem;">0</div>
+                <div style="font-size: 0.72rem; color: #fca5a5;">SKU no encontrado en catálogo</div>
+              </div>
+            </div>
+
+            <!-- Sub-tabs for Detailed Breakdown -->
+            <div style="display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1rem; flex-wrap: wrap;">
+              <button type="button" class="btn sigo-report-tab-btn active" onclick="switchSigoReportTab('tab-processed')" id="btnTabProcessed" style="padding: 0.35rem 0.8rem; font-size: 0.8rem;">
+                ✅ Movimientos Cargados (<span id="tabCountProcessed">0</span>)
+              </button>
+              <button type="button" class="btn sigo-report-tab-btn" onclick="switchSigoReportTab('tab-duplicates')" id="btnTabDuplicates" style="padding: 0.35rem 0.8rem; font-size: 0.8rem;">
+                ⚠️ Duplicados Omitidos (<span id="tabCountDuplicates">0</span>)
+              </button>
+              <button type="button" class="btn sigo-report-tab-btn" onclick="switchSigoReportTab('tab-customers')" id="btnTabCustomers" style="padding: 0.35rem 0.8rem; font-size: 0.8rem;">
+                👤 Clientes Creados (<span id="tabCountCustomers">0</span>)
+              </button>
+              <button type="button" class="btn sigo-report-tab-btn" onclick="switchSigoReportTab('tab-skipped')" id="btnTabSkipped" style="padding: 0.35rem 0.8rem; font-size: 0.8rem;">
+                ❌ No Cargados / Sin Producto (<span id="tabCountSkipped">0</span>)
+              </button>
+            </div>
+
+            <div id="tab-processed" class="sigo-report-tab-content">
+              <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
+                <table class="custom-table" style="font-size: 0.82rem;">
+                  <thead>
+                    <tr>
+                      <th>Factura</th>
+                      <th>Fecha Movimiento</th>
+                      <th>SKU</th>
+                      <th>Producto</th>
+                      <th>Cant.</th>
+                      <th>Cliente / NIT</th>
+                      <th>Total $</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sigoReportProcessedTable"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="tab-duplicates" class="sigo-report-tab-content" style="display: none;">
+              <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
+                <table class="custom-table" style="font-size: 0.82rem;">
+                  <thead>
+                    <tr>
+                      <th>Factura</th>
+                      <th>SKU</th>
+                      <th>Producto</th>
+                      <th>Cliente / NIT</th>
+                      <th>Cant.</th>
+                      <th>Motivo de Omisión</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sigoReportDuplicatesTable"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="tab-customers" class="sigo-report-tab-content" style="display: none;">
+              <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
+                <table class="custom-table" style="font-size: 0.82rem;">
+                  <thead>
+                    <tr>
+                      <th>Identificación (NIT / CC)</th>
+                      <th>Nombre o Razón Social</th>
+                      <th>Contacto</th>
+                      <th>Correo Electrónico</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sigoReportCustomersTable"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="tab-skipped" class="sigo-report-tab-content" style="display: none;">
+              <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
+                <table class="custom-table" style="font-size: 0.82rem;">
+                  <thead>
+                    <tr>
+                      <th>Código / SKU Sigo</th>
+                      <th>Nombre en Archivo Sigo</th>
+                      <th>Factura</th>
+                      <th>Cant.</th>
+                      <th>Motivo</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sigoReportSkippedTable"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel 3: History of Uploaded Batches with Download and View Report -->
+          <div class="panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+              <h3 style="font-size: 1rem; font-weight: 600; margin: 0;">🗂️ Historial de Cargas de Cierre de Ventas Realizadas</h3>
+              <span id="sigoUploadsHistoryCount" class="badge badge-blue" style="font-size: 0.75rem;">0 Cargas Registradas</span>
+            </div>
+
+            <div class="table-responsive">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>Fecha y Hora de Carga</th>
+                    <th>Usuario Responsable</th>
+                    <th>Nombre del Archivo</th>
+                    <th>Resumen de Ingesta</th>
+                    <th style="text-align: center; width: 220px;">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="sigoUploadsHistoryTableBody">
+                  <!-- JS -->
+                </tbody>
+              </table>
             </div>
           </div>
         </section>
@@ -800,6 +1011,11 @@
                   </div>
                 </div>
 
+                <div class="form-group">
+                  <label class="form-label" for="movDate">Fecha del Movimiento *</label>
+                  <input type="date" id="movDate" class="form-control" required>
+                </div>
+
                 <div class="form-group" id="serialInputGroup" style="display:none;">
                   <label class="form-label" for="movSerial">Número de Serie (Requerido)</label>
                   <input type="text" id="movSerial" class="form-control" placeholder="Escanee o digite serial (Ej. SN-DWH-2026-S102)">
@@ -832,7 +1048,7 @@
               <table class="custom-table kardex-table">
                 <thead>
                   <tr>
-                    <th>Fecha</th>
+                    <th>Fecha Movimiento</th>
                     <th>Tipo</th>
                     <th>Producto</th>
                     <th>Ubicación / Sede</th>
@@ -2753,6 +2969,6 @@
     };
   </script>
   <!-- Core Application Bundle -->
-  <script src="js/app.js?v=20260828_multitier_pricing"></script>
+  <script src="js/app.js?v=20260828_sigo_cierre_ventas_engine"></script>
 </body>
 </html>

@@ -108149,7 +108149,7 @@ function initRoleSwitcher() {
 
 const ROLE_PERMISSIONS = {
   ADMINISTRADOR: {
-    views: ['view-dashboard', 'view-catalog', 'view-edit-product', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-users', 'view-audit-logs', 'view-forecasting', 'view-reports'],
+    views: ['view-dashboard', 'view-sigo-intake', 'view-catalog', 'view-edit-product', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-users', 'view-audit-logs', 'view-forecasting', 'view-reports'],
     canEditCatalog: true,
     canEditCustomers: true,
     canApprovePendingIntakes: true,
@@ -108160,7 +108160,7 @@ const ROLE_PERMISSIONS = {
     canExportReports: true
   },
   SUPERADMINISTRADOR: {
-    views: ['view-dashboard', 'view-catalog', 'view-edit-product', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-users', 'view-audit-logs', 'view-forecasting', 'view-reports'],
+    views: ['view-dashboard', 'view-sigo-intake', 'view-catalog', 'view-edit-product', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-users', 'view-audit-logs', 'view-forecasting', 'view-reports'],
     canEditCatalog: true,
     canEditCustomers: true,
     canApprovePendingIntakes: true,
@@ -108314,6 +108314,8 @@ async function switchView(viewId) {
 
   if (viewId === 'view-dashboard') {
     renderDashboard();
+  } else if (viewId === 'view-sigo-intake') {
+    loadSigoUploadsHistory();
   } else if (viewId === 'view-catalog') {
     populateAmazonSidebarFilters();
     renderCatalog();
@@ -110256,148 +110258,336 @@ async function handleTransferStock(e) {
   renderAllViews();
 }
 
-// AUTOMATED SIGO SALES REPORT INGESTION ENGINE WITH ANTI-DUPLICATION VALIDATION
+// ============================================================================
+// MODULO: INGESTA AUTOMATICA DE CIERRE DE VENTAS SIGO & HISTORIAL DE CARGAS
+// ============================================================================
+
+let selectedSigoUploadFile = null;
+let currentSigoReportData = null;
+
 function triggerSigoReportImport() {
   if (!isAdminUser(appState.currentUser)) {
     alert("🔒 Restricción RBAC: Solo el Administrador está autorizado para procesar y cargar reportes de Sigo.");
     return;
   }
-  document.getElementById("sigoReportFileInput").click();
+  switchView('view-sigo-intake');
 }
 
-function handleSigoReportUpload(event) {
-  const file = event.target.files[0];
+function handleSigoFileSelection(input) {
+  const file = input.files ? input.files[0] : null;
   if (!file) return;
 
-  processAutomatedSigoReport(file.name);
-}
+  const validExts = ['.xlsx', '.xls'];
+  const fileName = file.name.toLowerCase();
+  const isValid = validExts.some(ext => fileName.endsWith(ext));
 
-function processAutomatedSigoReport(fileName) {
-  const simulatedSigoBatch = [
-    {
-      invoiceNumber: "FACT-SIGO-2026-901",
-      date: new Date().toISOString().substring(0, 10),
-      customerNit: "901.888.777-2",
-      customerName: "AGROVET DEL LLANO S.A.S (Cliente Nuevo Sigo)",
-      customerPhone: "+57 318 999 4455",
-      customerEmail: "compras@agrovetllano.co",
-      items: [
-        { sku: "MC 001", quantity: 20 },
-        { sku: "MC 004", quantity: 15 }
-      ]
-    },
-    {
-      invoiceNumber: "FACT-SIGO-2026-902",
-      date: new Date().toISOString().substring(0, 10),
-      customerNit: "900.138.371-1",
-      customerName: "FINCA DON PEDRO PMO S.A.S",
-      customerPhone: "+57 310 456 7890",
-      customerEmail: "donpedro@finca.co",
-      items: [
-        { sku: "MC 003", quantity: 1 }
-      ]
-    }
-  ];
-
-  let newCustomersCreated = 0;
-  let totalExitsRegistered = 0;
-  let newInvoicesCount = 0;
-  let duplicateInvoicesCount = 0;
-  const skippedInvoices = [];
-
-  simulatedSigoBatch.forEach(invoiceData => {
-    const isAlreadyProcessed = appState.movements.some(m => m.invoiceNumber === invoiceData.invoiceNumber);
-
-    if (isAlreadyProcessed) {
-      duplicateInvoicesCount++;
-      skippedInvoices.push(invoiceData.invoiceNumber);
-      return;
-    }
-
-    newInvoicesCount++;
-
-    let customer = appState.customers.find(c => c.documentNumber === sanitizeDocument(invoiceData.customerNit).cleanDoc || c.name.toLowerCase() === invoiceData.customerName.toLowerCase());
-    
-    if (!customer) {
-      const parsedDoc = sanitizeDocument(invoiceData.customerNit);
-      customer = {
-        id: `cust-${Date.now()}-${Math.floor(Math.random()*100)}`,
-        documentType: parsedDoc.docType,
-        documentNumber: parsedDoc.cleanDoc,
-        verificationDigit: parsedDoc.dv,
-        name: invoiceData.customerName,
-        phone: invoiceData.customerPhone,
-        email: invoiceData.customerEmail,
-        city: "Registrado Automáticamente vía Sigo Report",
-        address: "Cierre de Caja Sigo"
-      };
-      appState.customers.push(customer);
-      newCustomersCreated++;
-      addActivityLog("CREACION", "CustomerAutoIngest", `Auto-creación de cliente nuevo '${customer.name}' desde reporte Sigo.`);
-    }
-
-    invoiceData.items.forEach(itemInfo => {
-      const product = appState.products.find(p => p.sku === itemInfo.sku);
-      if (product) {
-        product.physicalStock = Math.max(0, product.physicalStock - itemInfo.quantity);
-        totalExitsRegistered += itemInfo.quantity;
-
-        const newMov = {
-          id: `mov-sigo-${Date.now()}-${Math.floor(Math.random()*1000)}`,
-          date: invoiceData.date,
-          type: "SALIDA_VENTA",
-          productId: product.id,
-          quantity: itemInfo.quantity,
-          invoiceNumber: invoiceData.invoiceNumber,
-          customerName: customer.name,
-          user: `${appState.currentUser.name} (Auto-Sigo)`,
-          notes: `Salida registrada automáticamente por cierre de ventas de Sigo (Archivo: ${fileName})`,
-          attachments: [
-            { name: fileName, type: 'excel', icon: '📊' }
-          ]
-        };
-
-        appState.movements.unshift(newMov);
-
-        if (product.requiresSerial) {
-          let serialItem = appState.serializedItems.find(i => i.productId === product.id && i.status === 'EN_STOCK');
-          if (serialItem) {
-            serialItem.status = "VENDIDO";
-            serialItem.currentCustomerId = customer.id;
-            serialItem.saleDate = invoiceData.date;
-            serialItem.invoiceNumber = invoiceData.invoiceNumber;
-            serialItem.attachments = [...(serialItem.attachments || []), { name: fileName, type: 'excel', icon: '📊' }];
-            serialItem.history.push({
-              type: "VENTA",
-              date: invoiceData.date,
-              user: "Sistema Auto-Sigo",
-              description: `Vendido automáticamente por reporte de caja Sigo. Factura: ${invoiceData.invoiceNumber}`,
-              attachments: [{ name: fileName, type: 'excel', icon: '📊' }]
-            });
-          }
-        }
-      }
-    });
-  });
-
-  if (newInvoicesCount === 0 && duplicateInvoicesCount > 0) {
-    addActivityLog("IMPORTACION", "SigoDeduplicationEngine", `Carga rechazada por duplicidad completa en '${fileName}'. Se omitieron ${duplicateInvoicesCount} facturas previamente registradas (${skippedInvoices.join(', ')}).`);
-    alert(`⚠️ ATENCIÓN: CANCELADO POR DUPLICIDAD DE REGISTRO\n\n📄 Archivo: ${fileName}\n\nTodas las facturas contenidas en este reporte (${skippedInvoices.join(', ')}) YA fueron registradas anteriormente en el sistema.\n\n🛡️ Se omitieron el 100% de los registros para proteger la línea de tiempo de Sigo y evitar dobles descuentos de inventario.`);
+  if (!isValid) {
+    alert("⚠️ FORMATO NO VÁLIDO: Por favor seleccione un archivo Excel de Sigo válido (.xlsx o .xls).");
+    input.value = '';
     return;
   }
 
-  addActivityLog("IMPORTACION", "SigoSalesProcessor", `Ingesta de Sigo '${fileName}'. Facturas Nuevas: ${newInvoicesCount} | Duplicadas Omitidas: ${duplicateInvoicesCount} | Clientes Creados: ${newCustomersCreated}`);
+  selectedSigoUploadFile = file;
+  const fileNameElem = document.getElementById("sigoSelectedFileName");
+  const fileSizeElem = document.getElementById("sigoSelectedFileSize");
+  const fileInfoElem = document.getElementById("sigoSelectedFileInfo");
 
-  let alertMessage = `🚀 INGESTA AUTOMÁTICA SIGO COMPLETADA:\n\n📄 Archivo: ${fileName}\n🧾 Facturas Nuevas Procesadas: ${newInvoicesCount}\n👤 Clientes Nuevos Creados: ${newCustomersCreated}\n📦 Salidas Descontadas: ${totalExitsRegistered} Unidades.`;
-  if (duplicateInvoicesCount > 0) {
-    alertMessage += `\n\n🛡️ VALIDACIÓN ANTI-DUPLICIDAD: Se omitieron ${duplicateInvoicesCount} facturas que ya existían previamente (${skippedInvoices.join(', ')}).`;
+  if (fileNameElem) fileNameElem.textContent = file.name;
+  if (fileSizeElem) {
+    const sizeKb = (file.size / 1024).toFixed(1);
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+    fileSizeElem.textContent = file.size > 1024 * 1024 ? `${sizeMb} MB` : `${sizeKb} KB`;
+  }
+  if (fileInfoElem) fileInfoElem.style.display = "block";
+}
+
+function clearSelectedSigoFile() {
+  selectedSigoUploadFile = null;
+  const input = document.getElementById("sigoFileUploadInput");
+  if (input) input.value = '';
+  const fileInfoElem = document.getElementById("sigoSelectedFileInfo");
+  if (fileInfoElem) fileInfoElem.style.display = "none";
+}
+
+async function executeSigoUpload() {
+  if (!selectedSigoUploadFile) {
+    alert("⚠️ Por favor seleccione un archivo de Sigo primero.");
+    return;
   }
 
-  alert(alertMessage);
+  if (!isAdminUser(appState.currentUser)) {
+    alert("🔒 Restricción RBAC: Solo el Administrador puede procesar cargas de Sigo.");
+    return;
+  }
 
-  saveCustomersToDisk();
-  populateDropdowns();
-  renderAllViews();
+  const btn = document.getElementById("btnProcessSigoUpload");
+  const spinner = document.getElementById("sigoUploadSpinner");
+  const fileInfo = document.getElementById("sigoSelectedFileInfo");
+
+  if (btn) btn.disabled = true;
+  if (spinner) spinner.style.display = "block";
+  if (fileInfo) fileInfo.style.display = "none";
+
+  try {
+    const formData = new FormData();
+    formData.append("file", selectedSigoUploadFile);
+    formData.append("userId", appState.currentUser ? appState.currentUser.id : "");
+    formData.append("userName", appState.currentUser ? (appState.currentUser.name || `${appState.currentUser.firstName} ${appState.currentUser.lastName}`.trim()) : "Administrador");
+    formData.append("userEmail", appState.currentUser ? appState.currentUser.email : "");
+
+    const response = await fetch(`${API_BASE}/sigo/upload`, {
+      method: "POST",
+      body: formData
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || "Ocurrió un error al procesar el archivo en el servidor.");
+    }
+
+    // Refresh application state from database
+    await loadAllFromAPI(false);
+
+    // Render report
+    currentSigoReportData = result.report;
+    renderSigoReport(result.report);
+
+    // Refresh history table
+    await loadSigoUploadsHistory();
+
+    // Clear file input
+    clearSelectedSigoFile();
+
+    addActivityLog("IMPORTACION", "SigoSalesEngine", `Ingesta exitosa de archivo Sigo '${result.report.originalFilename}'. Facturas: ${result.report.processedCount} procesadas | ${result.report.duplicateCount} duplicadas omitidas | ${result.report.newCustomersCount} clientes creados.`);
+
+    alert(`🎉 ¡PROCESO DE INGESTA SIGO COMPLETADO!\n\n📄 Archivo: ${result.report.originalFilename}\n✅ Movimientos Cargados: ${result.report.processedCount}\n🟡 Duplicados Omitidos: ${result.report.duplicateCount}\n👤 Clientes Creados: ${result.report.newCustomersCount}\n🔴 Sin Producto en Catálogo: ${result.report.skippedProductsCount}\n\nLos movimientos han sido registrados en el Kardex y las existencias han sido actualizadas.`);
+
+  } catch (err) {
+    console.error("Error en executeSigoUpload:", err);
+    alert(`❌ ERROR EN INGESTA SIGO:\n\n${err.message}`);
+    if (fileInfo) fileInfo.style.display = "block";
+  } finally {
+    if (btn) btn.disabled = false;
+    if (spinner) spinner.style.display = "none";
+  }
+}
+
+function renderSigoReport(report) {
+  if (!report) return;
+  const panel = document.getElementById("sigoReportPanel");
+  if (!panel) return;
+
+  const titleElem = document.getElementById("sigoReportTitle");
+  const subtitleElem = document.getElementById("sigoReportSubtitle");
+
+  if (titleElem) titleElem.textContent = `📋 Informe de Auditoría Sigo: ${report.originalFilename}`;
+  if (subtitleElem) {
+    const uploadDateStr = (report.uploadedAt || '').replace('T', ' ').substring(0, 16);
+    subtitleElem.innerHTML = `<strong>Cargado por:</strong> ${report.userName || 'Admin'} | <strong>Fecha:</strong> ${uploadDateStr} | <strong>Total Registros de Producto:</strong> ${report.totalProductRows || (report.processedCount + report.duplicateCount + report.skippedProductsCount)}`;
+  }
+
+  // Metrics
+  document.getElementById("repMetricProcessed").textContent = report.processedCount || 0;
+  document.getElementById("repMetricDuplicates").textContent = report.duplicateCount || 0;
+  document.getElementById("repMetricCustomers").textContent = report.newCustomersCount || 0;
+  document.getElementById("repMetricSkipped").textContent = report.skippedProductsCount || 0;
+
+  document.getElementById("tabCountProcessed").textContent = report.processedCount || 0;
+  document.getElementById("tabCountDuplicates").textContent = report.duplicateCount || 0;
+  document.getElementById("tabCountCustomers").textContent = report.newCustomersCount || 0;
+  document.getElementById("tabCountSkipped").textContent = report.skippedProductsCount || 0;
+
+  // Processed table
+  const procTbody = document.getElementById("sigoReportProcessedTable");
+  if (procTbody) {
+    const list = report.processedList || [];
+    if (list.length === 0) {
+      procTbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1rem;">No hubo movimientos nuevos para registrar.</td></tr>`;
+    } else {
+      procTbody.innerHTML = list.map(item => `
+        <tr>
+          <td><strong style="color: var(--accent-blue);">${item.invoice || '-'}</strong></td>
+          <td><strong style="color: var(--accent-green);">${item.movementDate || '-'}</strong></td>
+          <td><strong>${item.sku || '-'}</strong></td>
+          <td>${item.productName || '-'}</td>
+          <td><span class="badge badge-green" style="font-weight: 700;">-${item.quantity}</span></td>
+          <td>${item.customer || '-'} <small style="color: var(--text-muted);">(${item.document || ''})</small></td>
+          <td style="color: var(--accent-green); font-weight: 600;">$${(item.total || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  // Duplicates table
+  const dupTbody = document.getElementById("sigoReportDuplicatesTable");
+  if (dupTbody) {
+    const list = report.duplicateList || [];
+    if (list.length === 0) {
+      dupTbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1rem;">No se detectaron registros duplicados.</td></tr>`;
+    } else {
+      dupTbody.innerHTML = list.map(item => `
+        <tr>
+          <td><strong style="color: var(--accent-amber);">${item.invoice || '-'}</strong></td>
+          <td><strong>${item.sku || '-'}</strong></td>
+          <td>${item.productName || '-'}</td>
+          <td>${item.customer || '-'} <small style="color: var(--text-muted);">(${item.document || ''})</small></td>
+          <td>${item.quantity || 1}</td>
+          <td style="color: #fde68a; font-size: 0.78rem;">${item.reason || 'Ya registrado previamente'}</td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  // Customers table
+  const custTbody = document.getElementById("sigoReportCustomersTable");
+  if (custTbody) {
+    const list = report.newCustomersList || [];
+    if (list.length === 0) {
+      custTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 1rem;">Todos los clientes ya existían previamente en la base de datos.</td></tr>`;
+    } else {
+      custTbody.innerHTML = list.map(item => `
+        <tr>
+          <td><strong style="color: #60a5fa;">${item.document || '-'}</strong></td>
+          <td><strong>${item.name || '-'}</strong></td>
+          <td>${item.contact || '-'}</td>
+          <td>${item.email ? `<a href="mailto:${item.email}" style="color: var(--accent-blue);">${item.email}</a>` : '-'}</td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  // Skipped (missing products) table
+  const skipTbody = document.getElementById("sigoReportSkippedTable");
+  if (skipTbody) {
+    const list = report.skippedProductsList || [];
+    if (list.length === 0) {
+      skipTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 1rem;">Todos los productos coincidieron con el catálogo de inventario.</td></tr>`;
+    } else {
+      skipTbody.innerHTML = list.map(item => `
+        <tr>
+          <td><strong style="color: #f87171;">${item.sku || '-'}</strong></td>
+          <td>${item.productName || '-'}</td>
+          <td>${item.invoice || '-'}</td>
+          <td>${item.quantity || 1}</td>
+          <td style="color: #fca5a5; font-size: 0.78rem;">${item.reason || 'Producto no encontrado en inventario'}</td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  panel.style.display = "block";
+  switchSigoReportTab('tab-processed');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function switchSigoReportTab(tabId) {
+  document.querySelectorAll('.sigo-report-tab-content').forEach(c => c.style.display = 'none');
+  document.querySelectorAll('.sigo-report-tab-btn').forEach(b => b.classList.remove('active'));
+
+  const activeContent = document.getElementById(tabId);
+  if (activeContent) activeContent.style.display = 'block';
+
+  if (tabId === 'tab-processed') document.getElementById('btnTabProcessed')?.classList.add('active');
+  else if (tabId === 'tab-duplicates') document.getElementById('btnTabDuplicates')?.classList.add('active');
+  else if (tabId === 'tab-customers') document.getElementById('btnTabCustomers')?.classList.add('active');
+  else if (tabId === 'tab-skipped') document.getElementById('btnTabSkipped')?.classList.add('active');
+}
+
+async function loadSigoUploadsHistory() {
+  const tbody = document.getElementById("sigoUploadsHistoryTableBody");
+  const countBadge = document.getElementById("sigoUploadsHistoryCount");
+  if (!tbody) return;
+
+  try {
+    const response = await fetch(`${API_BASE}/sigo/uploads`);
+    if (!response.ok) throw new Error("No se pudo obtener el historial de cargas.");
+    const uploads = await response.json();
+
+    if (countBadge) countBadge.textContent = `${uploads.length} Carga${uploads.length === 1 ? '' : 's'} Registrada${uploads.length === 1 ? '' : 's'}`;
+
+    if (!uploads || uploads.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+            📭 Aún no se han realizado cargas de cierre de ventas de Sigo.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = uploads.map(u => {
+      const dateStr = (u.uploadedAt || '').replace('T', ' ').substring(0, 16);
+      const isRenamed = u.savedFilename && u.originalFilename && u.savedFilename !== u.originalFilename;
+      const sizeKb = u.fileSize ? (u.fileSize / 1024).toFixed(1) : '0';
+
+      return `
+        <tr>
+          <td>
+            <strong>${dateStr || '-'}</strong>
+          </td>
+          <td>
+            <div style="font-weight: 600; color: var(--text-main);">${u.userName || 'Administrador'}</div>
+            ${u.userEmail ? `<div style="font-size: 0.72rem; color: var(--text-muted);">${u.userEmail}</div>` : ''}
+          </td>
+          <td>
+            <div style="font-weight: 600; color: var(--accent-green); display: flex; align-items: center; gap: 0.3rem;">
+              <span>📊</span> ${u.originalFilename}
+            </div>
+            <div style="font-size: 0.72rem; color: var(--text-muted);">
+              Tamaño: ${sizeKb} KB
+              ${isRenamed ? `<span class="badge badge-amber" style="font-size: 0.68rem; margin-left: 0.3rem;" title="Almacenado como ${u.savedFilename}">Renombrado seguro</span>` : ''}
+            </div>
+          </td>
+          <td>
+            <div style="display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center;">
+              <span class="badge badge-green" title="Movimientos cargados a Kardex">🟢 ${u.processedCount || 0} Cargados</span>
+              ${u.duplicateCount > 0 ? `<span class="badge badge-amber" title="Duplicados omitidos">🟡 ${u.duplicateCount} Duplicados</span>` : ''}
+              ${u.newCustomersCount > 0 ? `<span class="badge badge-blue" title="Clientes nuevos creados">👤 ${u.newCustomersCount} Clientes</span>` : ''}
+              ${u.skippedProductsCount > 0 ? `<span class="badge badge-red" title="Omitidos por no existir producto">🔴 ${u.skippedProductsCount} Sin Producto</span>` : ''}
+            </div>
+          </td>
+          <td style="text-align: center;">
+            <div style="display: flex; gap: 0.35rem; justify-content: center; align-items: center; flex-wrap: wrap;">
+              <a href="${API_BASE}/sigo/download/${u.id}" class="btn btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.75rem; text-decoration: none;" title="Descargar archivo original utilizado">
+                📥 Descargar
+              </a>
+              <button type="button" class="btn btn-primary" onclick="viewHistoricalSigoReport('${u.id}')" style="padding: 0.25rem 0.55rem; font-size: 0.75rem;" title="Consultar informe detallado de esta carga">
+                📊 Ver Informe
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+  } catch (err) {
+    console.error("Error al cargar historial de Sigo:", err);
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" style="text-align: center; color: var(--accent-red); padding: 1.5rem;">
+          ❌ Error al cargar historial de cargas: ${err.message}
+        </td>
+      </tr>
+    `;
+  }
+}
+
+async function viewHistoricalSigoReport(uploadId) {
+  try {
+    const response = await fetch(`${API_BASE}/sigo/report/${uploadId}`);
+    if (!response.ok) throw new Error("No se pudo obtener el informe de la carga.");
+    const data = await response.json();
+    if (data && data.report) {
+      renderSigoReport(data.report);
+    } else {
+      alert("⚠️ No se encontró la información detallada de esta carga.");
+    }
+  } catch (err) {
+    console.error("Error en viewHistoricalSigoReport:", err);
+    alert(`❌ Error al consultar informe: ${err.message}`);
+  }
 }
 
 function renderDashboard() {
@@ -111698,13 +111888,17 @@ function handleCreateMovement(e) {
     product.stockByLocation[locationId] = Math.max(0, (product.stockByLocation[locationId] || 0) + qty);
   }
 
+  const movDate = document.getElementById("movDate") ? (document.getElementById("movDate").value || new Date().toISOString().substring(0, 10)) : new Date().toISOString().substring(0, 10);
+
   const newMov = {
     id: `mov-${Date.now()}`,
     date: new Date().toISOString(),
+    movementDate: movDate,
     type,
     productId: prodId,
     quantity: qty,
     locationId: locationId,
+    customerId: customer ? customer.id : customerId,
     invoiceNumber: invoice || null,
     customerName: customer ? customer.name : (type === 'SALIDA_VENTA' ? 'Venta General' : (location ? location.name : null)),
     user: appState.currentUser ? appState.currentUser.name : 'Usuario',
@@ -111786,11 +111980,15 @@ function renderKardex() {
     const locObj = appState.locations ? appState.locations.find(l => l.id === m.locationId) : null;
     const locName = locObj ? locObj.name : (m.locationId || 'Central');
     const atts = Array.isArray(m.attachments) ? m.attachments : [];
-    const dateStr = (m.date || '').replace('T', ' ').substring(0, 16);
+    const movDateStr = m.movementDate || (m.date ? m.date.substring(0, 10) : '-');
+    const regTimeStr = (m.date || '').replace('T', ' ').substring(0, 16);
 
     return `
       <tr>
-        <td><strong>${dateStr || '-'}</strong></td>
+        <td>
+          <strong style="color: var(--accent-green); font-size: 0.85rem;">${movDateStr}</strong>
+          ${regTimeStr ? `<div style="font-size: 0.72rem; color: var(--text-muted);" title="Registrado en sistema: ${regTimeStr}">Reg: ${regTimeStr}</div>` : ''}
+        </td>
         <td>
           <span class="badge ${
             m.type === 'INGRESO_COMPRA' || m.type === 'ENTRADA' ? 'badge-green' :
