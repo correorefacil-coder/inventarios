@@ -110403,7 +110403,7 @@ function renderSigoReport(report) {
   if (procTbody) {
     const list = report.processedList || [];
     if (list.length === 0) {
-      procTbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1rem;">No hubo movimientos nuevos para registrar.</td></tr>`;
+      procTbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 1rem;">No hubo movimientos nuevos para registrar.</td></tr>`;
     } else {
       procTbody.innerHTML = list.map(item => `
         <tr>
@@ -110412,6 +110412,7 @@ function renderSigoReport(report) {
           <td><strong>${item.sku || '-'}</strong></td>
           <td>${item.productName || '-'}</td>
           <td><span class="badge badge-green" style="font-weight: 700;">-${item.quantity}</span></td>
+          <td>${item.serialNumber ? `<span class="badge badge-purple" style="font-size: 0.72rem;">🔢 ${item.serialNumber}</span>` : '<span style="color: var(--text-muted); font-size: 0.75rem;">-</span>'}</td>
           <td>${item.customer || '-'} <small style="color: var(--text-muted);">(${item.document || ''})</small></td>
           <td style="color: var(--accent-green); font-weight: 600;">$${(item.total || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
         </tr>
@@ -110457,20 +110458,21 @@ function renderSigoReport(report) {
     }
   }
 
-  // Skipped (missing products) table
+  // Skipped (missing products / services / envios) table
   const skipTbody = document.getElementById("sigoReportSkippedTable");
   if (skipTbody) {
     const list = report.skippedProductsList || [];
     if (list.length === 0) {
-      skipTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 1rem;">Todos los productos coincidieron con el catálogo de inventario.</td></tr>`;
+      skipTbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1rem;">Todos los productos coincidieron con el catálogo de inventario.</td></tr>`;
     } else {
       skipTbody.innerHTML = list.map(item => `
         <tr>
           <td><strong style="color: #f87171;">${item.sku || '-'}</strong></td>
           <td>${item.productName || '-'}</td>
           <td>${item.invoice || '-'}</td>
+          <td>${item.customer || '-'}</td>
           <td>${item.quantity || 1}</td>
-          <td style="color: #fca5a5; font-size: 0.78rem;">${item.reason || 'Producto no encontrado en inventario'}</td>
+          <td style="color: #fca5a5; font-size: 0.78rem;">${item.reason || 'Omitido / No inventariable'}</td>
         </tr>
       `).join('');
     }

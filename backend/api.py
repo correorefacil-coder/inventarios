@@ -917,16 +917,14 @@ def process_sigo_upload():
         if not any(vals): continue
 
         t_clas = str(get_val(row_cells, 'Tipo clasificación', 'Tipo clasificacion') or '').strip()
-        # Siigo product rows have 'Producto'
-        if t_clas.lower() != 'producto':
-            continue
-
+        t_reg = str(get_val(row_cells, 'Tipo de registro') or '').strip()
         raw_code = str(get_val(row_cells, 'Código', 'Codigo') or '').strip()
-        if not raw_code or raw_code.lower() == 'none':
-            continue
-
-        clean_sku = raw_code.replace(' ', '').upper().strip()
         prod_name_file = str(get_val(row_cells, 'Nombre') or '').strip()
+
+        # Column Q content (observations / description)
+        col_q_val = str(prod_name_file or '').strip()
+        if len(row_cells) > 16 and row_cells[16].value:
+            col_q_val = str(row_cells[16].value).strip()
 
         comprobante = str(get_val(row_cells, 'Número comprobante', 'Numero comprobante') or '').strip()
         consecutivo = str(get_val(row_cells, 'Consecutivo') or '').strip()
@@ -938,12 +936,6 @@ def process_sigo_upload():
         email = str(get_val(row_cells, 'Correo electrónico', 'Correo electronico') or '').strip()
         contacto = str(get_val(row_cells, 'Nombre contacto') or '').strip()
 
-        fecha_val = get_val(row_cells, 'Fecha elaboración', 'Fecha elaboracion', 'Fecha creación', 'Fecha creacion')
-        if isinstance(fecha_val, (datetime, date)):
-            fecha_mov = fecha_val.strftime('%Y-%m-%d')
-        else:
-            fecha_mov = str(fecha_val or '')[:10] if fecha_val else now_iso()[:10]
-
         try: cant = int(float(get_val(row_cells, 'Cantidad') or 1))
         except: cant = 1
 
@@ -953,7 +945,51 @@ def process_sigo_upload():
         try: total_val = float(get_val(row_cells, 'Total') or (cant * val_unit))
         except: total_val = cant * val_unit
 
-        # 1. Check Product in Catalog
+        fecha_val = get_val(row_cells, 'Fecha elaboración', 'Fecha elaboracion', 'Fecha creación', 'Fecha creacion')
+        if isinstance(fecha_val, (datetime, date)):
+            fecha_mov = fecha_val.strftime('%Y-%m-%d')
+        else:
+            fecha_mov = str(fecha_val or '')[:10] if fecha_val else now_iso()[:10]
+
+        # 1. Check if row is a Service / Envio / Non-inventory line
+        is_service_or_envio = (
+            t_clas.lower() == 'servicio' or 
+            'servicio' in t_clas.lower() or 
+            raw_code.lower() in ['envio', 'envío', 'flete', 'fletes'] or 
+            'envio' in prod_name_file.lower() or 'envío' in prod_name_file.lower()
+        )
+
+        if is_service_or_envio:
+            skipped_products_list.append({
+                'row': r,
+                'sku': raw_code or 'ENVIO/SERVICIO',
+                'productName': prod_name_file or 'Envío / Servicio no inventariable',
+                'quantity': cant,
+                'invoice': factura,
+                'customer': cliente_nombre,
+                'reason': f"Omitido por ser Clasificación '{t_clas or 'Servicio'}' / Ítem No Inventariable ('{prod_name_file or raw_code}')."
+            })
+            continue
+
+        if t_clas.lower() != 'producto':
+            if raw_code and raw_code.lower() != 'none':
+                skipped_products_list.append({
+                    'row': r,
+                    'sku': raw_code,
+                    'productName': prod_name_file or 'No inventariable',
+                    'quantity': cant,
+                    'invoice': factura,
+                    'customer': cliente_nombre,
+                    'reason': f"Omitido por Tipo de Clasificación: '{t_clas}'."
+                })
+            continue
+
+        if not raw_code or raw_code.lower() == 'none':
+            continue
+
+        clean_sku = raw_code.replace(' ', '').upper().strip()
+
+        # 2. Check Product in Catalog
         if clean_sku not in db_products:
             skipped_products_list.append({
                 'row': r,
@@ -968,7 +1004,7 @@ def process_sigo_upload():
 
         product = db_products[clean_sku]
 
-        # 2. Check / Auto-Create Customer
+        # 3. Check / Auto-Create Customer
         customer = None
         if nit_clean and nit_clean in db_customers_by_doc:
             customer = db_customers_by_doc[nit_clean]
@@ -1000,7 +1036,7 @@ def process_sigo_upload():
                 'email': email
             })
 
-        # 3. Deduplication Check: Product + Invoice + Customer
+        # 4. Deduplication Check: Product + Invoice + Customer
         dedup_key = (product.id, factura.upper().strip(), customer.id)
         dedup_key_name = (product.id, factura.upper().strip(), customer.name.lower().strip())
         batch_key = (clean_sku, factura.upper().strip(), customer.id)
@@ -1022,7 +1058,18 @@ def process_sigo_upload():
         seen_in_batch.add(batch_key)
         existing_movements.add(dedup_key)
 
-        # 4. Valid Movement: Deduct Stock & Record Kardex Movement
+        # 5. Extract Serials from Column Q (Observations)
+        serial_pattern = re.compile(r'SERIAL\s*:\s*([A-Za-z0-9\-_]+(?:\/[A-Za-z0-9\-_]+)?)', re.IGNORECASE)
+        found_serials = serial_pattern.findall(col_q_val)
+        extracted_serials = []
+        for fs in found_serials:
+            ser_code = fs.split('/')[0].strip()
+            if ser_code and ser_code not in extracted_serials:
+                extracted_serials.append(ser_code)
+
+        serial_str = ', '.join(extracted_serials) if extracted_serials else ''
+
+        # 6. Valid Movement: Deduct Stock & Record Kardex Movement
         product.physicalStock = max(0, product.physicalStock - cant)
         loc_stock = {}
         if product.locationStock:
@@ -1032,8 +1079,53 @@ def process_sigo_upload():
         product.locationStock = json.dumps(loc_stock)
         product.updatedAt = now_iso()
 
-        # Handle Serialized Items if applicable
-        if product.requiresSerial:
+        # Handle Serialized Items discharge / cross-referencing
+        if extracted_serials:
+            for s_num in extracted_serials:
+                s_item = SerializedItem.query.filter(
+                    (SerializedItem.productId == product.id) &
+                    (SerializedItem.serialNumber.ilike(s_num))
+                ).first()
+                if not s_item:
+                    s_item = SerializedItem.query.filter(SerializedItem.serialNumber.ilike(s_num)).first()
+
+                if s_item:
+                    s_item.status = 'VENDIDO'
+                    s_item.currentCustomerId = customer.id
+                    s_item.saleDate = fecha_mov
+                    s_item.invoiceNumber = factura
+                    s_item.updatedAt = now_iso()
+                    ev_list = []
+                    if s_item.events:
+                        try: ev_list = json.loads(s_item.events)
+                        except: ev_list = []
+                    ev_list.append({
+                        'type': 'VENTA',
+                        'date': fecha_mov,
+                        'user': user_name,
+                        'description': f"Venta y salida registrada automáticamente vía Cierre Sigo. Factura: {factura}"
+                    })
+                    s_item.events = json.dumps(ev_list, ensure_ascii=False)
+                else:
+                    db.session.add(SerializedItem(
+                        id=f"ser-{gen_id()}",
+                        productId=product.id,
+                        serialNumber=s_num,
+                        status='VENDIDO',
+                        locationId='loc-1',
+                        currentCustomerId=customer.id,
+                        entryDate=fecha_mov,
+                        saleDate=fecha_mov,
+                        invoiceNumber=factura,
+                        events=json.dumps([{
+                            'type': 'VENTA',
+                            'date': fecha_mov,
+                            'user': user_name,
+                            'description': f"Venta registrada vía Cierre Sigo. Factura: {factura}"
+                        }], ensure_ascii=False),
+                        updatedAt=now_iso()
+                    ))
+        elif product.requiresSerial:
             avail_serial = SerializedItem.query.filter_by(productId=product.id, status='EN_STOCK').first()
             if avail_serial:
                 avail_serial.status = 'VENDIDO'
@@ -1051,8 +1143,8 @@ def process_sigo_upload():
             invoiceNumber=factura,
             customerId=customer.id,
             customerName=customer.name,
-            serialNumber='',
-            notes=f"Salida automática por cierre de ventas Sigo (Factura {factura}, Archivo: {orig_name})",
+            serialNumber=serial_str,
+            notes=col_q_val if col_q_val else f"Salida automática por cierre de ventas Sigo (Factura {factura}, Archivo: {orig_name})",
             userId=user_name,
             locationId='loc-1',
             fromLocationId='loc-1',
@@ -1073,6 +1165,7 @@ def process_sigo_upload():
             'customerId': customer.id,
             'document': nit_clean,
             'quantity': cant,
+            'serialNumber': serial_str,
             'movementDate': fecha_mov,
             'total': total_val
         })

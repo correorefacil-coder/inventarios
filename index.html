@@ -472,9 +472,9 @@
               </div>
 
               <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); padding: 0.85rem; border-radius: var(--radius-md); text-align: center;">
-                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Omitidos (Sin Producto)</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Omitidos (Servicios / No Catálogo)</div>
                 <div id="repMetricSkipped" style="font-size: 1.6rem; font-weight: 800; color: #f87171; margin-top: 0.2rem;">0</div>
-                <div style="font-size: 0.72rem; color: #fca5a5;">SKU no encontrado en catálogo</div>
+                <div style="font-size: 0.72rem; color: #fca5a5;">Envíos, servicios y SKU no encontrados</div>
               </div>
             </div>
 
@@ -490,7 +490,7 @@
                 👤 Clientes Creados (<span id="tabCountCustomers">0</span>)
               </button>
               <button type="button" class="btn sigo-report-tab-btn" onclick="switchSigoReportTab('tab-skipped')" id="btnTabSkipped" style="padding: 0.35rem 0.8rem; font-size: 0.8rem;">
-                ❌ No Cargados / Sin Producto (<span id="tabCountSkipped">0</span>)
+                ❌ Omitidos / Envíos / Servicios (<span id="tabCountSkipped">0</span>)
               </button>
             </div>
 
@@ -504,6 +504,7 @@
                       <th>SKU</th>
                       <th>Producto</th>
                       <th>Cant.</th>
+                      <th>Serial(es) Cruzados</th>
                       <th>Cliente / NIT</th>
                       <th>Total $</th>
                     </tr>
@@ -553,10 +554,11 @@
                   <thead>
                     <tr>
                       <th>Código / SKU Sigo</th>
-                      <th>Nombre en Archivo Sigo</th>
+                      <th>Nombre / Descripción en Sigo</th>
                       <th>Factura</th>
+                      <th>Cliente</th>
                       <th>Cant.</th>
-                      <th>Motivo</th>
+                      <th>Motivo de Omisión</th>
                     </tr>
                   </thead>
                   <tbody id="sigoReportSkippedTable"></tbody>
