@@ -1,9 +1,20 @@
 const fs = require('fs');
 const path = require('path');
 
-// Cargar variables de entorno obligatoriamente desde la ruta del script
+// Cargar variables de entorno de forma segura sin requerir dotenv obligatoriamente
 const envPath = path.resolve(__dirname, '../.env');
-require('dotenv').config({ path: envPath });
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf8');
+  envContent.split('\n').forEach(line => {
+    line = line.trim();
+    if (line && !line.startsWith('#') && line.includes('=')) {
+      const idx = line.indexOf('=');
+      const key = line.substring(0, idx).trim();
+      const val = line.substring(idx + 1).trim().replace(/^["']|["']$/g, '');
+      if (!process.env[key]) process.env[key] = val;
+    }
+  });
+}
 
 const nodemailer = require('nodemailer');
 const { execSync } = require('child_process');
