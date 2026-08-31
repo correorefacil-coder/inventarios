@@ -111794,16 +111794,120 @@ function toggleInvoiceRequirement() {
   }
 }
 
+function isProductSerialized(product) {
+  if (!product) return false;
+  return product.requiresSerial === true || product.requiresSerial === 'true' || product.requiresSerial === 1 || product.requiresSerial === '1';
+}
+
 function handleProductSelectForMovement() {
-  const prodId = document.getElementById("movProduct").value;
+  updateKardexSerialUI();
+}
+
+function updateKardexSerialUI() {
+  const prodId = document.getElementById("movProduct")?.value;
   const product = appState.products.find(p => p.id === prodId);
   const serialGroup = document.getElementById("serialInputGroup");
+  if (!serialGroup) return;
 
-  if (product && product.requiresSerial) {
-    serialGroup.style.display = "block";
-  } else {
+  const isSerialized = isProductSerialized(product);
+  if (!isSerialized) {
     serialGroup.style.display = "none";
+    return;
   }
+
+  serialGroup.style.display = "block";
+  const qty = parseInt(document.getElementById("movQuantity")?.value) || 1;
+  const type = document.getElementById("movType")?.value || "INGRESO_COMPRA";
+  const locationId = document.getElementById("movLocation")?.value || "loc-1";
+
+  const reqQtyEl = document.getElementById("kardexSerialQtyRequired");
+  if (reqQtyEl) reqQtyEl.textContent = qty;
+
+  const isExit = (type === 'SALIDA_VENTA' || type === 'GARANTIA_REEMPLAZO' || type === 'AJUSTE_QUITAR');
+  const availablePicker = document.getElementById("kardexAvailableSerialsPicker");
+  const availableList = document.getElementById("kardexAvailableSerialsList");
+
+  if (isExit && availablePicker && availableList) {
+    availablePicker.style.display = "block";
+    const availItems = (appState.serializedItems || []).filter(i => 
+      i.productId === product.id && i.status === 'EN_STOCK' && i.currentLocationId === locationId
+    );
+    if (availItems.length === 0) {
+      availableList.innerHTML = `<span style="color: var(--accent-red); font-size: 0.78rem;">⚠️ No hay seriales en stock disponibles en esta sede (${availItems.length}).</span>`;
+    } else {
+      const currentSelected = parseEnteredKardexSerials();
+      availableList.innerHTML = availItems.map(item => {
+        const isChecked = currentSelected.includes(item.serialNumber);
+        return `
+          <button type="button" class="badge" style="cursor: pointer; padding: 0.25rem 0.5rem; font-family: monospace; font-size: 0.78rem; background: ${isChecked ? 'var(--accent-green)' : 'rgba(255,255,255,0.08)'}; color: ${isChecked ? '#0f172a' : 'var(--text-main)'}; border: 1px solid ${isChecked ? 'var(--accent-green)' : 'var(--border-color)'}; font-weight: ${isChecked ? '700' : '500'};" onclick="toggleKardexAvailableSerialChoice('${item.serialNumber}')">
+            ${isChecked ? '✓ ' : '+ '}${item.serialNumber}
+          </button>
+        `;
+      }).join('');
+    }
+  } else if (availablePicker) {
+    availablePicker.style.display = "none";
+  }
+
+  handleKardexSerialTextInput();
+}
+
+function parseEnteredKardexSerials() {
+  const raw = document.getElementById("movSerial")?.value || "";
+  return raw.split(/[\n,;\t]+/).map(s => s.trim()).filter(Boolean);
+}
+
+function toggleKardexAvailableSerialChoice(serialNum) {
+  const current = parseEnteredKardexSerials();
+  const idx = current.indexOf(serialNum);
+  if (idx > -1) {
+    current.splice(idx, 1);
+  } else {
+    current.push(serialNum);
+  }
+  const movSerialInput = document.getElementById("movSerial");
+  if (movSerialInput) {
+    movSerialInput.value = current.join(", ");
+  }
+  updateKardexSerialUI();
+}
+
+function handleKardexSerialTextInput() {
+  const qty = parseInt(document.getElementById("movQuantity")?.value) || 1;
+  const serials = parseEnteredKardexSerials();
+  const countBadge = document.getElementById("kardexSerialCounterBadge");
+  if (countBadge) {
+    countBadge.textContent = `${serials.length} de ${qty} ingresados`;
+    if (serials.length === qty) {
+      countBadge.className = "badge badge-green";
+      countBadge.style.background = "#10b981";
+      countBadge.style.color = "#ffffff";
+    } else if (serials.length > qty) {
+      countBadge.className = "badge badge-red";
+      countBadge.style.background = "#ef4444";
+      countBadge.style.color = "#ffffff";
+    } else {
+      countBadge.className = "badge badge-amber";
+      countBadge.style.background = "#f59e0b";
+      countBadge.style.color = "#000000";
+    }
+  }
+}
+
+function openCameraForKardexSerial() {
+  startCameraScanner((code) => {
+    if (!code) return;
+    const current = parseEnteredKardexSerials();
+    if (!current.includes(code.trim())) {
+      current.push(code.trim());
+      const input = document.getElementById("movSerial");
+      if (input) input.value = current.join(", ");
+      updateKardexSerialUI();
+      alert(`📷 Serial escaneado y agregado: ${code.trim()}`);
+    } else {
+      alert(`⚠️ El serial '${code.trim()}' ya fue agregado a la lista.`);
+    }
+  });
 }
 
 let pendingMovementAttachments = [];
@@ -111871,7 +111975,6 @@ async function handleCreateMovement(e) {
   const invoice = document.getElementById("movInvoice").value;
   const locationId = document.getElementById("movLocation") ? document.getElementById("movLocation").value : "loc-1";
   const customerId = document.getElementById("movCustomer").value;
-  const serialNumber = document.getElementById("movSerial")?.value;
   const notes = document.getElementById("movNotes").value;
 
   if (!locationId) {
@@ -111886,6 +111989,25 @@ async function handleCreateMovement(e) {
   if (!product) {
     alert("⚠️ Por favor seleccione un producto válido.");
     return;
+  }
+
+  const isSerialized = isProductSerialized(product);
+  const parsedSerials = parseEnteredKardexSerials();
+
+  if (isSerialized) {
+    if (parsedSerials.length === 0) {
+      alert(`⚠️ SERIALES REQUERIDOS:\n\nEl producto '${product.sku} - ${product.name}' tiene control serializado obligatorio.\n\nDebe ingresar los ${qty} números de serie correspondientes.`);
+      return;
+    }
+    if (parsedSerials.length !== qty) {
+      alert(`⚠️ CANTIDAD DE SERIALES NO COINCIDE:\n\nHa especificado Cantidad = ${qty}, pero ha ingresado ${parsedSerials.length} seriales.\n\nPor favor ingrese exactamente ${qty} seriales (separados por coma o salto de línea).`);
+      return;
+    }
+    const uniqueSerials = new Set(parsedSerials);
+    if (uniqueSerials.size !== parsedSerials.length) {
+      alert(`⚠️ SERIALES DUPLICADOS EN EL FORMULARIO:\n\nHay seriales repetidos en la lista ingresada. Cada unidad debe tener un número de serie único.`);
+      return;
+    }
   }
 
   const attachments = [...pendingMovementAttachments];
@@ -111916,10 +112038,6 @@ async function handleCreateMovement(e) {
   if (type === 'INGRESO_COMPRA' && appState.currentUser.role === 'LOGISTICA') {
     const targetLocId = locationId;
     const targetLoc = location;
-    let parsedSerials = [];
-    if (product.requiresSerial && serialNumber) {
-      parsedSerials = serialNumber.split(',').map(s => s.trim()).filter(Boolean);
-    }
 
     const newPendingIntake = {
       id: `intake-${Date.now()}`,
@@ -111932,7 +112050,7 @@ async function handleCreateMovement(e) {
       locationId: targetLocId,
       locationName: targetLoc ? targetLoc.name : "Bodega Principal (Central)",
       proposedQuantity: qty,
-      requiresSerial: product.requiresSerial,
+      requiresSerial: isSerialized,
       proposedSerials: parsedSerials,
       invoiceNumber: invoice || `FAC-IN-${Date.now().toString().slice(-4)}`,
       notes: notes || "Ingreso registrado por usuario Logística",
@@ -111944,7 +112062,7 @@ async function handleCreateMovement(e) {
     appState.pendingIntakes.unshift(newPendingIntake);
     savePendingIntakesToDisk();
 
-    addActivityLog("CREACION", "PendingInventoryIntake", `Ingreso de ${qty} unidades de '${product.sku}' enviado a cola de validación por usuario Logística.`);
+    addActivityLog("CREACION", "PendingInventoryIntake", `Ingreso de ${qty} unidades de '${product.sku}' enviado a cola de validación por usuario Logística con ${parsedSerials.length} seriales.`);
 
     alert(`⏳ INGRESO REGISTRADO EN BORRADOR: Su solicitud de ingreso de ${qty} unidades de '${product.sku}' en '${targetLoc ? targetLoc.name : targetLocId}' ha quedado PENDIENTE DE VALIDACIÓN por un Administrador.\n\nNo ingresará al inventario físico ni al Kardex hasta que un Administrador la revise y la apruebe.`);
     
@@ -111955,6 +112073,94 @@ async function handleCreateMovement(e) {
     return;
   }
 
+  const movDate = document.getElementById("movDate") ? (document.getElementById("movDate").value || new Date().toISOString().substring(0, 10)) : new Date().toISOString().substring(0, 10);
+
+  // Serial Validations and Assignments
+  if (isSerialized && (type === 'INGRESO_COMPRA' || type === 'ENTRADA' || type === 'AJUSTE_AGREGAR')) {
+    for (const sn of parsedSerials) {
+      const existing = (appState.serializedItems || []).find(i => i.serialNumber === sn && i.status === 'EN_STOCK');
+      if (existing) {
+        alert(`❌ ERROR DE SERIAL DUPLICADO:\n\nEl serial '${sn}' ya se encuentra registrado con estado 'EN_STOCK' en el inventario.`);
+        return;
+      }
+    }
+
+    parsedSerials.forEach(sn => {
+      let serialItem = (appState.serializedItems || []).find(i => i.serialNumber === sn);
+      if (!serialItem) {
+        serialItem = {
+          id: `ser-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+          productId: prodId,
+          productSku: product.sku,
+          productName: product.name,
+          serialNumber: sn,
+          status: "EN_STOCK",
+          currentLocationId: locationId,
+          currentCustomerId: null,
+          entryDate: movDate,
+          saleDate: null,
+          invoiceNumber: invoice || null,
+          attachments: attachments || [],
+          history: [{
+            type: "INGRESO_COMPRA",
+            date: movDate,
+            user: appState.currentUser ? appState.currentUser.name : 'Usuario',
+            description: `Ingreso de inventario registrado en Kardex (${location ? location.name : locationId}) - Factura: ${invoice || 'N/A'}`
+          }]
+        };
+        appState.serializedItems.push(serialItem);
+      } else {
+        serialItem.status = "EN_STOCK";
+        serialItem.currentLocationId = locationId;
+        serialItem.history.push({
+          type: "INGRESO_COMPRA",
+          date: movDate,
+          user: appState.currentUser ? appState.currentUser.name : 'Usuario',
+          description: `Reingreso de inventario (${location ? location.name : locationId}) - Factura: ${invoice || 'N/A'}`
+        });
+      }
+    });
+  }
+
+  if (isSerialized && (type === 'SALIDA_VENTA' || type === 'GARANTIA_REEMPLAZO' || type === 'AJUSTE_QUITAR')) {
+    for (const sn of parsedSerials) {
+      const serialItem = (appState.serializedItems || []).find(i => 
+        i.serialNumber === sn && (i.productId === prodId || !i.productId) && i.status === 'EN_STOCK'
+      );
+      if (!serialItem) {
+        alert(`❌ SERIAL NO DISPONIBLE:\n\nEl serial '${sn}' no se encuentra disponible en stock para salida en este producto.`);
+        return;
+      }
+    }
+
+    parsedSerials.forEach(sn => {
+      const serialItem = (appState.serializedItems || []).find(i => 
+        i.serialNumber === sn && (i.productId === prodId || !i.productId) && i.status === 'EN_STOCK'
+      );
+      if (serialItem) {
+        if (type === 'SALIDA_VENTA') {
+          serialItem.status = "VENDIDO";
+          serialItem.currentCustomerId = customerId;
+          serialItem.saleDate = movDate;
+          serialItem.invoiceNumber = invoice || serialItem.invoiceNumber;
+          serialItem.attachments = [...(serialItem.attachments || []), ...attachments];
+        } else if (type === 'AJUSTE_QUITAR') {
+          serialItem.status = "DE_BAJA";
+        } else if (type === 'GARANTIA_REEMPLAZO') {
+          serialItem.status = "GARANTIA_REEMPLAZO";
+        }
+        serialItem.history.push({
+          type: type === 'SALIDA_VENTA' ? 'VENTA' : type,
+          date: movDate,
+          user: appState.currentUser ? appState.currentUser.name : 'Usuario',
+          description: `${type}: ${notes || 'Salida de inventario'} (Factura: ${invoice || 'N/A'})`,
+          attachments
+        });
+      }
+    });
+  }
+
+  // Stock updates
   if (type === 'INGRESO_COMPRA' || type === 'ENTRADA' || type === 'AJUSTE_AGREGAR') {
     product.physicalStock = (product.physicalStock || 0) + qty;
     product.stockByLocation[locationId] = (product.stockByLocation[locationId] || 0) + qty;
@@ -111965,8 +112171,6 @@ async function handleCreateMovement(e) {
     product.physicalStock = Math.max(0, (product.physicalStock || 0) + qty);
     product.stockByLocation[locationId] = Math.max(0, (product.stockByLocation[locationId] || 0) + qty);
   }
-
-  const movDate = document.getElementById("movDate") ? (document.getElementById("movDate").value || new Date().toISOString().substring(0, 10)) : new Date().toISOString().substring(0, 10);
 
   const newMov = {
     id: `mov-${Date.now()}`,
@@ -111980,48 +112184,11 @@ async function handleCreateMovement(e) {
     invoiceNumber: invoice || null,
     customerName: customer ? customer.name : (type === 'SALIDA_VENTA' ? 'Venta General' : (location ? location.name : null)),
     user: appState.currentUser ? appState.currentUser.name : 'Usuario',
-    notes,
+    notes: `${notes || ''}${parsedSerials.length > 0 ? ` [Seriales: ${parsedSerials.join(', ')}]` : ''}`,
     attachments
   };
 
   appState.movements.unshift(newMov);
-
-  if (product.requiresSerial && serialNumber) {
-    let serialItem = appState.serializedItems.find(i => i.serialNumber === serialNumber);
-    if (!serialItem && (type === 'INGRESO_COMPRA' || type === 'ENTRADA')) {
-      serialItem = {
-        id: `ser-${Date.now()}`,
-        productId: prodId,
-        serialNumber: serialNumber,
-        status: "EN_STOCK",
-        currentLocationId: locationId,
-        currentCustomerId: null,
-        entryDate: new Date().toISOString().substring(0, 10),
-        saleDate: null,
-        invoiceNumber: invoice,
-        attachments,
-        history: []
-      };
-      appState.serializedItems.push(serialItem);
-    }
-
-    if (serialItem) {
-      if (type === 'SALIDA_VENTA') {
-        serialItem.status = "VENDIDO";
-        serialItem.currentCustomerId = customerId;
-        serialItem.saleDate = new Date().toISOString().substring(0, 10);
-        serialItem.invoiceNumber = invoice;
-        serialItem.attachments = [...(serialItem.attachments || []), ...attachments];
-      }
-      serialItem.history.push({
-        type: type === 'SALIDA_VENTA' ? 'VENTA' : type,
-        date: new Date().toISOString().substring(0, 10),
-        user: appState.currentUser.name,
-        description: `${type}: ${notes || 'Sin observaciones'} (Factura: ${invoice || 'N/A'})`,
-        attachments
-      });
-    }
-  }
 
   await Promise.all([
     saveProductsToDisk(),
@@ -112029,13 +112196,15 @@ async function handleCreateMovement(e) {
     saveSerializedItemsToDisk()
   ]);
 
-  addActivityLog("CREACION", "KardexMovement", `Registro de movimiento Kardex (${type}) para '${product.sku}'. Cant: ${qty}. Factura: ${invoice || 'N/A'}`);
+  addActivityLog("CREACION", "KardexMovement", `Registro de movimiento Kardex (${type}) para '${product.sku}'. Cant: ${qty}. Seriales: ${parsedSerials.length}. Factura: ${invoice || 'N/A'}`);
 
-  alert(`✅ Movimiento registrado exitosamente con ${attachments.length} soportes adjuntos.`);
+  alert(`✅ Movimiento registrado exitosamente con ${attachments.length} soportes y ${parsedSerials.length} seriales asignados.`);
   
   pendingMovementAttachments = [];
   renderMovementFilesPreview();
   document.getElementById("movementForm").reset();
+  const serialGroup = document.getElementById("serialInputGroup");
+  if (serialGroup) serialGroup.style.display = "none";
   populateDropdowns();
   renderAllViews();
 }

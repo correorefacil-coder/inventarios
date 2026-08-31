@@ -956,7 +956,7 @@
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label" for="movType">Tipo de Movimiento *</label>
-                  <select id="movType" class="form-control" required onchange="toggleInvoiceRequirement()">
+                  <select id="movType" class="form-control" required onchange="toggleInvoiceRequirement(); updateKardexSerialUI();">
                     <option value="INGRESO_COMPRA">Ingreso (Compra / Importación)</option>
                     <option value="SALIDA_VENTA">Salida (Venta a Cliente)</option>
                     <option value="AJUSTE_AGREGAR">Ajuste de Inventario (Agregar)</option>
@@ -986,7 +986,7 @@
 
                 <div class="form-group">
                   <label class="form-label" for="movQuantity">Cantidad *</label>
-                  <input type="number" id="movQuantity" class="form-control" min="1" value="1" required>
+                  <input type="number" id="movQuantity" class="form-control" min="1" value="1" required oninput="updateKardexSerialUI()">
                 </div>
               </div>
 
@@ -998,7 +998,7 @@
 
                 <div class="form-group">
                   <label class="form-label" for="movLocation">Ubicación / Sede * (Obligatoria)</label>
-                  <select id="movLocation" class="form-control" required>
+                  <select id="movLocation" class="form-control" required onchange="updateKardexSerialUI()">
                     <!-- JS populated locations -->
                   </select>
                 </div>
@@ -1017,11 +1017,36 @@
                   <label class="form-label" for="movDate">Fecha del Movimiento *</label>
                   <input type="date" id="movDate" class="form-control" required>
                 </div>
+              </div>
 
-                <div class="form-group" id="serialInputGroup" style="display:none;">
-                  <label class="form-label" for="movSerial">Número de Serie (Requerido)</label>
-                  <input type="text" id="movSerial" class="form-control" placeholder="Escanee o digite serial (Ej. SN-DWH-2026-S102)">
+              <!-- DEDICATED SERIAL SECTION FOR KARDEX -->
+              <div id="serialInputGroup" style="display: none; background: rgba(16, 185, 129, 0.06); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+                  <label class="form-label" style="font-weight: 700; color: var(--accent-green); margin-bottom: 0;" id="kardexSerialLabel">
+                    🔢 Control de Números de Serie (<span id="kardexSerialQtyRequired">1</span> requeridos)
+                  </label>
+                  <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <span id="kardexSerialCounterBadge" class="badge badge-amber" style="font-size: 0.78rem; padding: 0.2rem 0.5rem;">0 de 1 ingresados</span>
+                    <button type="button" class="btn btn-camera" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="openCameraForKardexSerial()">
+                      📷 Escanear con Cámara
+                    </button>
+                  </div>
                 </div>
+
+                <div id="kardexSerialInputContainer">
+                  <textarea id="movSerial" class="form-control" rows="2" style="font-family: monospace; font-size: 0.85rem;" placeholder="Escanee o digite seriales (separados por coma, espacio o salto de línea)..." oninput="handleKardexSerialTextInput()"></textarea>
+                </div>
+
+                <div id="kardexAvailableSerialsPicker" style="display: none; margin-top: 0.5rem;">
+                  <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.3rem;">
+                    💡 Seleccione los seriales disponibles en esta bodega para darles salida:
+                  </div>
+                  <div id="kardexAvailableSerialsList" style="display: flex; flex-wrap: wrap; gap: 0.4rem; max-height: 120px; overflow-y: auto; padding: 0.4rem; background: rgba(0,0,0,0.3); border-radius: 4px;"></div>
+                </div>
+
+                <small id="kardexSerialHelpText" style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.35rem;">
+                  Ingrese un número de serie único por cada unidad. Puede separar múltiples seriales con comas, espacios o saltos de línea.
+                </small>
               </div>
 
               <div class="form-group">
