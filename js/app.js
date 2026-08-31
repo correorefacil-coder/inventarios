@@ -108240,7 +108240,7 @@ const ROLE_PERMISSIONS = {
   },
   LOGISTICA: {
     views: ['view-dashboard', 'view-catalog', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-forecasting'],
-    canEditCatalog: false,
+    canEditCatalog: true,
     canEditCustomers: true,
     canApprovePendingIntakes: false,
     canViewFinancials: false,
@@ -108281,6 +108281,14 @@ function isAdminUser(roleOrUser) {
   const role = typeof roleOrUser === 'string' ? roleOrUser : (roleOrUser.role || roleOrUser.roleName || '');
   const r = role.toUpperCase();
   return r === 'ADMINISTRADOR' || r === 'SUPERADMINISTRADOR' || r === 'SUPER_ADMINISTRADOR' || r === 'SUPERADMIN' || r === 'SUPERUSER' || roleOrUser.email === 'gerencia@softproductiva.com';
+}
+
+function canManageCatalog(roleOrUser) {
+  if (!roleOrUser) return false;
+  if (isAdminUser(roleOrUser)) return true;
+  const role = typeof roleOrUser === 'string' ? roleOrUser : (roleOrUser.role || roleOrUser.roleName || '');
+  const r = role.toUpperCase();
+  return r.includes('LOGIS') || r === 'LOGISTICA';
 }
 
 function toggleFinancialFields(role) {
@@ -111428,7 +111436,7 @@ function renderCatalog() {
         </td>
         <td style="text-align: center;">
           <div style="display: flex; gap: 0.3rem; justify-content: center; align-items: center; flex-wrap: wrap;">
-            ${isAdminUser(appState.currentUser) ? `
+            ${canManageCatalog(appState.currentUser) ? `
               <button class="btn btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.75rem; background: rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.4); color: var(--accent-green);" onclick="openEditProductModal('${p.id}')" title="Editar producto e inventario">
                 ✏️ Editar
               </button>
@@ -111437,7 +111445,7 @@ function renderCatalog() {
               <button class="btn btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.75rem;" onclick="openSerialInspectorModal('${p.id}')" title="Ver números de serie registrados">
                 🔍 Seriales (${registeredSerialsCount})
               </button>
-            ` : (!isAdminUser(appState.currentUser) ? '-' : '')}
+            ` : (!canManageCatalog(appState.currentUser) ? '-' : '')}
           </div>
         </td>
       </tr>
@@ -113809,8 +113817,8 @@ function simulateBarcodeScan(scannedCode) {
 }
 
 function openProductModal() {
-  if (!isAdminUser(appState.currentUser)) {
-    alert("🔒 Restricción RBAC: Solo Administradores y Superadministradores pueden registrar nuevos productos.");
+  if (!canManageCatalog(appState.currentUser)) {
+    alert("🔒 Restricción RBAC: No tienes permisos para registrar nuevos productos.");
     return;
   }
   const reqSelect = document.getElementById("newReqSerial");
@@ -113907,8 +113915,8 @@ function handleCreateProduct(e) {
 }
 
 function openEditProductModal(productId) {
-  if (!isAdminUser(appState.currentUser)) {
-    alert("🔒 Restricción RBAC: Solo Administradores y Superadministradores pueden editar información de productos e inventario.");
+  if (!canManageCatalog(appState.currentUser)) {
+    alert("🔒 Restricción RBAC: No tienes permisos para editar información de productos.");
     return;
   }
 
@@ -114122,8 +114130,8 @@ function closeEditProductModal() {
 
 function handleUpdateProduct(e) {
   e.preventDefault();
-  if (!isAdminUser(appState.currentUser)) {
-    alert("🔒 Restricción RBAC: Solo Administradores y Superadministradores pueden guardar cambios en productos.");
+  if (!canManageCatalog(appState.currentUser)) {
+    alert("🔒 Restricción RBAC: No tienes permisos para guardar cambios en productos.");
     return;
   }
 
@@ -114143,10 +114151,14 @@ function handleUpdateProduct(e) {
   const description = document.getElementById("editDescription").value.trim();
   const categoryId = document.getElementById("editCategory").value;
   const unitOfMeasure = document.getElementById("editUnit").value;
-  const baseCost = parseFloat(document.getElementById("editBaseCost").value) || 0;
-  const salePrice = parseFloat(document.getElementById("editSalePrice").value) || 0;
-  const salePrice2 = parseFloat(document.getElementById("editSalePrice2")?.value || document.getElementById("editModalSalePrice2")?.value) || 0;
-  const salePrice3 = parseFloat(document.getElementById("editSalePrice3")?.value || document.getElementById("editModalSalePrice3")?.value) || 0;
+  const rawBaseCost = parseFloat(document.getElementById("editBaseCost")?.value);
+  const baseCost = !isNaN(rawBaseCost) && rawBaseCost > 0 ? rawBaseCost : (product.baseCost || 0);
+  const rawSalePrice = parseFloat(document.getElementById("editSalePrice")?.value);
+  const salePrice = !isNaN(rawSalePrice) && rawSalePrice > 0 ? rawSalePrice : (product.salePrice || 0);
+  const rawSalePrice2 = parseFloat(document.getElementById("editSalePrice2")?.value || document.getElementById("editModalSalePrice2")?.value);
+  const salePrice2 = !isNaN(rawSalePrice2) && rawSalePrice2 > 0 ? rawSalePrice2 : (product.salePrice2 || 0);
+  const rawSalePrice3 = parseFloat(document.getElementById("editSalePrice3")?.value || document.getElementById("editModalSalePrice3")?.value);
+  const salePrice3 = !isNaN(rawSalePrice3) && rawSalePrice3 > 0 ? rawSalePrice3 : (product.salePrice3 || 0);
   const reservedStock = parseInt(document.getElementById("editReservedStock").value) || 0;
   const minStockAlert = parseInt(document.getElementById("editMinStock").value) || 0;
   const warrantyMonths = parseInt(document.getElementById("editWarrantyMonths").value) || 0;
