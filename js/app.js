@@ -108239,7 +108239,7 @@ const ROLE_PERMISSIONS = {
     canExportReports: true
   },
   LOGISTICA: {
-    views: ['view-dashboard', 'view-catalog', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-forecasting'],
+    views: ['view-dashboard', 'view-catalog', 'view-edit-product', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-forecasting'],
     canEditCatalog: true,
     canEditCustomers: true,
     canApprovePendingIntakes: false,
