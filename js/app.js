@@ -115118,6 +115118,7 @@ function rejectPendingIntake(intakeId) {
 // UNIVERSAL CAMERA SCANNER (BARCODES 1D, QR CODES, 2D DATAMATRIX, CODE 128)
 // ==========================================================================
 
+let universalScannerReader = null;
 let currentCameraStream = null;
 let cameraScannerInterval = null;
 
@@ -115128,17 +115129,45 @@ async function startCameraScanner(onCodeScanned) {
   if (!modal || !video) return;
 
   modal.classList.add("active");
-  if (status) status.textContent = "Buscando cámara...";
+  if (status) status.textContent = "Iniciando cámara y escáner óptico...";
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" }
-    });
+    if (window.ZXing) {
+      if (!universalScannerReader) {
+        universalScannerReader = new ZXing.BrowserMultiFormatReader();
+      }
+      if (status) status.textContent = "📷 Cámara activa. Enfoque el código de barras o QR...";
+      
+      universalScannerReader.decodeFromVideoDevice(undefined, 'cameraScannerVideo', (result, err) => {
+        if (result && result.getText) {
+          const scannedCode = result.getText();
+          if (navigator.vibrate) {
+            try { navigator.vibrate(120); } catch(e) {}
+          }
+          closeCameraScannerModal();
+          if (typeof onCodeScanned === 'function') {
+            onCodeScanned(scannedCode);
+          }
+        }
+      });
+      return;
+    }
+
+    // Fallback if ZXing is not available
+    const constraints = {
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    };
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (e1) {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    }
     currentCameraStream = stream;
     video.srcObject = stream;
     await video.play();
 
-    if (status) status.textContent = "📷 Cámara activa. Apunte al código de barras, QR o DataMatrix...";
+    if (status) status.textContent = "📷 Cámara activa. Apunte al código de barras o QR...";
 
     if ('BarcodeDetector' in window) {
       const barcodeDetector = new BarcodeDetector({
@@ -115159,10 +115188,11 @@ async function startCameraScanner(onCodeScanned) {
         } catch (err) {}
       }, 250);
     } else {
-      if (status) status.textContent = "💡 Digite o escanee con lector óptico USB/Bluetooth, o utilice Chrome/Safari en dispositivo móvil.";
+      if (status) status.textContent = "💡 Cámara encendida. Para escanear, asegúrese de apuntar bien o use la pistola lectora.";
     }
   } catch (err) {
-    if (status) status.textContent = "❌ No se pudo acceder a la cámara. Verifique los permisos en su navegador.";
+    console.error("Camera scanner error:", err);
+    if (status) status.textContent = "❌ No se pudo acceder a la cámara. Verifique los permisos de cámara en su navegador.";
   }
 }
 
@@ -115170,13 +115200,25 @@ function closeCameraScannerModal() {
   const modal = document.getElementById("cameraScannerModal");
   if (modal) modal.classList.remove("active");
 
+  if (universalScannerReader) {
+    try { universalScannerReader.reset(); } catch(e) {}
+  }
   if (cameraScannerInterval) {
     clearInterval(cameraScannerInterval);
     cameraScannerInterval = null;
   }
   if (currentCameraStream) {
-    currentCameraStream.getTracks().forEach(track => track.stop());
+    try {
+      currentCameraStream.getTracks().forEach(track => track.stop());
+    } catch(e) {}
     currentCameraStream = null;
+  }
+  const video = document.getElementById("cameraScannerVideo");
+  if (video) {
+    try {
+      video.pause();
+      video.srcObject = null;
+    } catch(e) {}
   }
 }
 
@@ -115254,12 +115296,5 @@ function scanAndCheckTransferSerial() {
     } else {
       alert(`⚠️ El serial '${code}' no se encuentra disponible en la sede de origen seleccionada.`);
     }
-  });
-}
-
-// Enforce default requiresSerial = false for all catalog products on load
-if (appState && Array.isArray(appState.products)) {
-  appState.products.forEach(p => {
-    p.requiresSerial = false;
   });
 }
