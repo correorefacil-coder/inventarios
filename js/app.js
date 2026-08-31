@@ -114667,7 +114667,18 @@ function renderPendingValidationsView() {
         <td>📍 ${i.locationName}</td>
         <td><strong style="font-size: 1.05rem; color: var(--accent-teal);">${i.proposedQuantity} Unds</strong></td>
         <td>${serialsLabel}</td>
-        <td>${i.invoiceNumber || '-'}</td>
+        <td>
+          <div style="font-weight: 500;">${i.invoiceNumber || '-'}</div>
+          ${(i.attachments && i.attachments.length > 0) ? `
+            <div style="display: flex; gap: 0.25rem; flex-wrap: wrap; margin-top: 0.25rem;">
+              ${i.attachments.map(att => `
+                <button type="button" class="btn btn-secondary" style="padding: 0.1rem 0.35rem; font-size: 0.7rem; display: inline-flex; align-items: center; gap: 0.2rem; background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.3); color: #93c5fd;" onclick="previewAttachment('${att.name}', '${att.type || 'image'}', ${att.dataUrl ? `'${att.dataUrl}'` : 'null'})" title="Ver comprobante adjunto: ${att.name}">
+                  ${att.icon || (att.type === 'pdf' ? '📄' : '📷')} ${att.name.length > 14 ? att.name.substring(0, 12) + '...' : att.name}
+                </button>
+              `).join('')}
+            </div>
+          ` : ''}
+        </td>
         <td>${statusBadge}</td>
         <td>
           ${i.status === 'PENDIENTE_VALIDACION' ? `
@@ -114691,6 +114702,67 @@ function renderPendingValidationsView() {
           `}
         </td>
       </tr>
+    `;
+  }).join('');
+}
+
+let currentEditPendingIntakeAttachments = [];
+
+async function handleEditPendingIntakeFiles(e) {
+  const input = e.target;
+  if (!input || !input.files || input.files.length === 0) return;
+
+  const newFiles = Array.from(input.files);
+  for (const f of newFiles) {
+    const alreadyExists = currentEditPendingIntakeAttachments.some(a => a.name === f.name && a.size === f.size);
+    if (!alreadyExists) {
+      const dataUrl = await readFileAsDataURL(f);
+      currentEditPendingIntakeAttachments.push({
+        id: `att-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        name: f.name,
+        size: f.size,
+        type: (f.type && f.type.includes('image')) ? 'image' : 'pdf',
+        icon: (f.type && f.type.includes('image')) ? '📷' : '📄',
+        dataUrl: dataUrl
+      });
+    }
+  }
+  input.value = "";
+  renderEditPendingIntakeFiles();
+}
+
+function removeEditPendingIntakeAttachment(id) {
+  currentEditPendingIntakeAttachments = currentEditPendingIntakeAttachments.filter(a => a.id !== id);
+  renderEditPendingIntakeFiles();
+}
+
+function renderEditPendingIntakeFiles() {
+  const container = document.getElementById("editPendingIntakeFilesContainer");
+  if (!container) return;
+  if (!currentEditPendingIntakeAttachments || currentEditPendingIntakeAttachments.length === 0) {
+    container.innerHTML = `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">Sin soportes o comprobantes adjuntos en este borrador.</span>`;
+    return;
+  }
+  container.innerHTML = currentEditPendingIntakeAttachments.map(f => {
+    const isImg = f.type === "image";
+    const icon = f.icon || (isImg ? "📷" : "📄");
+    const sizeKb = f.size ? `${(f.size / 1024).toFixed(1)} KB` : '';
+    return `
+      <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border-color); padding: 0.4rem 0.6rem; border-radius: 6px;">
+        <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 65%;">
+          <span>${icon}</span>
+          <strong style="color: var(--text-main);">${f.name}</strong>
+          ${sizeKb ? `<span style="color: var(--text-muted); font-size: 0.72rem;">(${sizeKb})</span>` : ''}
+        </div>
+        <div style="display: flex; gap: 0.3rem; align-items: center;">
+          <button type="button" class="btn btn-secondary" style="padding: 0.15rem 0.45rem; font-size: 0.72rem;" onclick="previewAttachment('${f.name}', '${f.type || 'image'}', ${f.dataUrl ? `'${f.dataUrl}'` : 'null'})" title="Ver / Descargar archivo">
+            👁️ Ver
+          </button>
+          <button type="button" class="btn btn-danger" style="padding: 0.15rem 0.45rem; font-size: 0.72rem;" onclick="removeEditPendingIntakeAttachment('${f.id}')" title="Eliminar este soporte">
+            🗑️ Eliminar
+          </button>
+        </div>
+      </div>
     `;
   }).join('');
 }
@@ -114730,12 +114802,16 @@ function openEditPendingIntakeModal(intakeId) {
     if (serialsGroup) serialsGroup.style.display = "none";
   }
 
+  currentEditPendingIntakeAttachments = Array.isArray(intake.attachments) ? JSON.parse(JSON.stringify(intake.attachments)) : [];
+  renderEditPendingIntakeFiles();
+
   modal.classList.add("active");
 }
 
 function closeEditPendingIntakeModal() {
   const modal = document.getElementById("editPendingIntakeModal");
   if (modal) modal.classList.remove("active");
+  currentEditPendingIntakeAttachments = [];
 }
 
 function handleSavePendingIntakeDraft(e) {
@@ -114762,11 +114838,12 @@ function handleSavePendingIntakeDraft(e) {
   intake.invoiceNumber = newInvoice;
   intake.notes = newNotes;
   intake.proposedSerials = newSerials;
+  intake.attachments = [...currentEditPendingIntakeAttachments];
 
   savePendingIntakesToDisk();
-  addActivityLog("MODIFICACION", "PendingIntakeDraft", `Administrador modificó borrador de ingreso '${intake.sku}' (Nueva cant: ${newQty}). Sin movimientos de salida.`);
+  addActivityLog("MODIFICACION", "PendingIntakeDraft", `Administrador modificó borrador de ingreso '${intake.sku}' (Nueva cant: ${newQty}, Soportes: ${intake.attachments.length}). Sin movimientos de salida.`);
 
-  alert(`✅ BORRADOR ACTUALIZADO: La propuesta de ingreso fue modificada con éxito. Permanece en borrador hasta que haga clic en 'Aprobar'.`);
+  alert(`✅ BORRADOR ACTUALIZADO: La propuesta de ingreso y sus archivos adjuntos fueron modificados con éxito. Permanece en borrador hasta que haga clic en 'Aprobar'.`);
   closeEditPendingIntakeModal();
   renderPendingValidationsView();
 }
@@ -114806,12 +114883,12 @@ function approvePendingIntake(intakeId) {
             entryDate: new Date().toISOString().substring(0, 10),
             saleDate: null,
             invoiceNumber: intake.invoiceNumber,
-            attachments: [],
+            attachments: intake.attachments || [],
             history: [{
               type: "INGRESO_COMPRA",
               date: new Date().toISOString().substring(0, 10),
               user: appState.currentUser.name,
-              description: `Ingreso de inventario aprobado por Administrador en sede '${intake.locationName}'`
+              description: `Ingreso de inventario aprobado por Administrador en sede '${intake.locationName}' (Doc: ${intake.invoiceNumber || 'N/A'})`
             }]
           };
           appState.serializedItems.push(serialItem);
@@ -114831,7 +114908,8 @@ function approvePendingIntake(intakeId) {
       invoiceNumber: intake.invoiceNumber || `FAC-IN-${Date.now().toString().slice(-4)}`,
       customerName: "Ingreso Proveedor (Aprobado)",
       user: `${appState.currentUser.name} (Aprueba: ${intake.submittedBy})`,
-      notes: `Aprobación de ingreso registrado originalmente por Logística. ${intake.notes || ''}`
+      notes: `Aprobación de ingreso registrado originalmente por Logística. ${intake.notes || ''}`,
+      attachments: intake.attachments || []
     };
 
     appState.movements.unshift(committedMov);
