@@ -108222,6 +108222,7 @@ const ROLE_PERMISSIONS = {
     canEditCustomers: true,
     canApprovePendingIntakes: true,
     canViewFinancials: true,
+    canViewSuppliers: true,
     canUploadSigo: true,
     canManageUsers: true,
     canViewAudit: true,
@@ -108233,6 +108234,7 @@ const ROLE_PERMISSIONS = {
     canEditCustomers: true,
     canApprovePendingIntakes: true,
     canViewFinancials: true,
+    canViewSuppliers: true,
     canUploadSigo: true,
     canManageUsers: true,
     canViewAudit: true,
@@ -108244,6 +108246,7 @@ const ROLE_PERMISSIONS = {
     canEditCustomers: true,
     canApprovePendingIntakes: false,
     canViewFinancials: false,
+    canViewSuppliers: true,
     canUploadSigo: false,
     canManageUsers: false,
     canViewAudit: false,
@@ -108255,6 +108258,7 @@ const ROLE_PERMISSIONS = {
     canEditCustomers: false,
     canApprovePendingIntakes: false,
     canViewFinancials: false,
+    canViewSuppliers: false,
     canUploadSigo: false,
     canManageUsers: false,
     canViewAudit: false,
@@ -108291,6 +108295,17 @@ function canManageCatalog(roleOrUser) {
   return r.includes('LOGIS') || r === 'LOGISTICA';
 }
 
+function canViewSuppliers(roleOrUser) {
+  const perms = getRolePermissions(roleOrUser || appState.currentUser);
+  return perms.canViewSuppliers !== false;
+}
+
+function sanitizeDescriptionForRole(desc, roleOrUser) {
+  if (!desc) return "";
+  if (canViewSuppliers(roleOrUser)) return desc;
+  return desc.replace(/\|\s*Prov:[^|]+/gi, '').replace(/Prov:[^|]+\|?/gi, '').trim();
+}
+
 function toggleFinancialFields(role) {
   const perms = getRolePermissions(role || appState.currentUser);
 
@@ -108318,7 +108333,13 @@ function toggleFinancialFields(role) {
     el.style.display = perms.canViewFinancials ? "" : "none";
   });
 
-  // 4. Catalog Edit Buttons
+  // 4. Supplier Filters visibility for Sales role
+  const filterSupplierGroup = document.getElementById("filterSupplierGroup");
+  const modalFilterSupplierGroup = document.getElementById("modalFilterSupplierGroup");
+  if (filterSupplierGroup) filterSupplierGroup.style.display = perms.canViewSuppliers ? "" : "none";
+  if (modalFilterSupplierGroup) modalFilterSupplierGroup.style.display = perms.canViewSuppliers ? "" : "none";
+
+  // 5. Catalog Edit Buttons
   const btnNewProduct = document.getElementById("btnNewProduct");
   const btnNewCategory = document.getElementById("btnNewCategory");
   const btnUploadExcelProducts = document.getElementById("btnUploadExcelProducts");
@@ -108326,15 +108347,15 @@ function toggleFinancialFields(role) {
   if (btnNewCategory) btnNewCategory.style.display = perms.canEditCatalog ? "inline-flex" : "none";
   if (btnUploadExcelProducts) btnUploadExcelProducts.style.display = perms.canEditCatalog ? "inline-flex" : "none";
 
-  // 5. Customer Creation Button
+  // 6. Customer Creation Button
   const btnNewCustomer = document.getElementById("btnNewCustomer");
   if (btnNewCustomer) btnNewCustomer.style.display = perms.canEditCustomers ? "inline-flex" : "none";
 
-  // 6. User Management Button
+  // 7. User Management Button
   const btnAdminUsers = document.getElementById("btnAdminUsers");
   if (btnAdminUsers) btnAdminUsers.style.display = perms.canManageUsers ? "inline-flex" : "none";
 
-  // 7. Banner RBAC Info
+  // 8. Banner RBAC Info
   const rbacBanner = document.getElementById("rbacBanner");
   const activeRoleName = document.getElementById("activeRoleName");
   if (rbacBanner && activeRoleName) {
@@ -110710,6 +110731,30 @@ function getProductBrandAndSupplier(p) {
   };
 }
 
+function getCategoryObj(val) {
+  if (!val) return null;
+  if (typeof val === 'object') {
+    val = val.categoryId || val.category || '';
+  }
+  const s = String(val).trim();
+  if (!s) return null;
+  const sLower = s.toLowerCase();
+  return (appState.categories || []).find(c => 
+    String(c.id).trim().toLowerCase() === sLower ||
+    (c.name && c.name.trim().toLowerCase() === sLower)
+  ) || null;
+}
+
+function getProductCategoryName(product) {
+  if (!product) return "General";
+  const catObj = getCategoryObj(product);
+  if (catObj && catObj.name) return catObj.name;
+  if (product.category && typeof product.category === 'string' && product.category.trim()) {
+    return product.category.trim();
+  }
+  return "General";
+}
+
 function selectAutocompleteProduct(prodId) {
   const hiddenInput = document.getElementById("movProduct");
   const searchInput = document.getElementById("movProductSearchInput");
@@ -110723,12 +110768,13 @@ function selectAutocompleteProduct(prodId) {
     hiddenInput.value = product.id;
     const { brand, supplier } = getProductBrandAndSupplier(product);
     const avail = product.physicalStock - product.reservedStock;
+    const showSupplier = canViewSuppliers();
 
     selectedCard.innerHTML = `
       <div class="selected-product-info">
         <div class="selected-product-title">📦 ${product.sku} - ${product.name}</div>
         <div class="selected-product-sub">
-          🏷️ Marca: <strong>${brand}</strong> | 🚚 Prov: <strong>${supplier}</strong> | 📦 Stock: <strong>${product.physicalStock} ${product.unitOfMeasure}</strong> (Disp: <strong>${avail}</strong>)
+          🏷️ Marca: <strong>${brand}</strong> ${showSupplier ? `| 🚚 Prov: <strong>${supplier}</strong>` : ''} | 📦 Stock: <strong>${product.physicalStock} ${product.unitOfMeasure}</strong> (Disp: <strong>${avail}</strong>)
         </div>
       </div>
       <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; color: var(--accent-red); border-color: rgba(239,68,68,0.4);" onclick="clearAutocompleteProduct()">
@@ -110826,10 +110872,11 @@ function renderMovementProductSuggestions() {
 
   const brandCounts = {};
   const supplierCounts = {};
+  const showSupplier = canViewSuppliers();
   appState.products.forEach(p => {
     const { brand, supplier } = getProductBrandAndSupplier(p);
     if (brand) brandCounts[brand] = (brandCounts[brand] || 0) + 1;
-    if (supplier) supplierCounts[supplier] = (supplierCounts[supplier] || 0) + 1;
+    if (showSupplier && supplier) supplierCounts[supplier] = (supplierCounts[supplier] || 0) + 1;
   });
 
   const sortedBrands = Object.keys(brandCounts).sort();
@@ -110845,15 +110892,16 @@ function renderMovementProductSuggestions() {
 
   let matches = appState.products.filter(p => {
     const { brand, supplier } = getProductBrandAndSupplier(p);
+    const cleanDesc = sanitizeDescriptionForRole(p.description);
     const matchesQuery = !query || 
       p.sku.toLowerCase().includes(query) ||
       p.name.toLowerCase().includes(query) ||
       brand.toLowerCase().includes(query) ||
-      supplier.toLowerCase().includes(query) ||
-      (p.description && p.description.toLowerCase().includes(query));
+      (showSupplier && supplier.toLowerCase().includes(query)) ||
+      (cleanDesc && cleanDesc.toLowerCase().includes(query));
 
     const matchesBrand = movAutocompleteFilterState.brands.length === 0 || movAutocompleteFilterState.brands.includes(brand);
-    const matchesSupplier = movAutocompleteFilterState.suppliers.length === 0 || movAutocompleteFilterState.suppliers.includes(supplier);
+    const matchesSupplier = !showSupplier || movAutocompleteFilterState.suppliers.length === 0 || movAutocompleteFilterState.suppliers.includes(supplier);
 
     return matchesQuery && matchesBrand && matchesSupplier;
   });
@@ -110895,7 +110943,7 @@ function renderMovementProductSuggestions() {
     </div>
   ` : '';
 
-  const supplierPopoverHtml = movAutocompleteFilterState.openPopover === 'supplier' ? `
+  const supplierPopoverHtml = (showSupplier && movAutocompleteFilterState.openPopover === 'supplier') ? `
     <div class="multi-select-popover" onclick="event.stopPropagation()">
       <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.2rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.25rem;">
         <span style="font-size: 0.74rem; font-weight: 700; color: var(--accent-green);">Seleccionar Proveedores</span>
@@ -110926,12 +110974,14 @@ function renderMovementProductSuggestions() {
           ${brandPopoverHtml}
         </div>
 
-        <div class="multi-select-wrapper">
-          <button type="button" class="multi-select-btn" onclick="toggleInlineFilterPopover('supplier', event)" style="${movAutocompleteFilterState.suppliers.length > 0 ? 'border-color: var(--accent-green); background: rgba(16,185,129,0.15);' : ''}">
-            ${supplierLabel}
-          </button>
-          ${supplierPopoverHtml}
-        </div>
+        ${showSupplier ? `
+          <div class="multi-select-wrapper">
+            <button type="button" class="multi-select-btn" onclick="toggleInlineFilterPopover('supplier', event)" style="${movAutocompleteFilterState.suppliers.length > 0 ? 'border-color: var(--accent-green); background: rgba(16,185,129,0.15);' : ''}">
+              ${supplierLabel}
+            </button>
+            ${supplierPopoverHtml}
+          </div>
+        ` : ''}
 
         <select id="movInlineFilterSort" style="padding: 0.2rem 0.4rem; font-size: 0.72rem; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px;" onchange="renderMovementProductSuggestions()">
           <option value="sku_asc" ${sort === 'sku_asc' ? 'selected' : ''}>SKU (A-Z)</option>
@@ -110966,7 +111016,7 @@ function renderMovementProductSuggestions() {
           </div>
           <div style="font-weight: 600; font-size: 0.88rem; color: var(--text-main);">${p.name}</div>
           <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem;">
-            🏷️ Marca: <strong>${brand}</strong> | 🚚 Prov: <strong>${supplier}</strong>
+            🏷️ Marca: <strong>${brand}</strong> ${showSupplier ? `| 🚚 Prov: <strong>${supplier}</strong>` : ''}
           </div>
         </div>
       `;
@@ -111014,7 +111064,10 @@ function populateModalSidebarFilters() {
   const brandContainer = document.getElementById("modalFilterBrandList");
   const supplierContainer = document.getElementById("modalFilterSupplierList");
   const categoryContainer = document.getElementById("modalFilterCategoryList");
+  const modalSupplierGroup = document.getElementById("modalFilterSupplierGroup");
+  const showSupplier = canViewSuppliers();
 
+  if (modalSupplierGroup) modalSupplierGroup.style.display = showSupplier ? "" : "none";
   if (!brandContainer) return;
 
   const brandCounts = {};
@@ -111024,10 +111077,9 @@ function populateModalSidebarFilters() {
   appState.products.forEach(p => {
     const { brand, supplier } = getProductBrandAndSupplier(p);
     brandCounts[brand] = (brandCounts[brand] || 0) + 1;
-    supplierCounts[supplier] = (supplierCounts[supplier] || 0) + 1;
+    if (showSupplier && supplier) supplierCounts[supplier] = (supplierCounts[supplier] || 0) + 1;
 
-    const categoryObj = appState.categories.find(c => c.id === p.categoryId);
-    const catName = categoryObj ? categoryObj.name : (p.category || "General");
+    const catName = getProductCategoryName(p);
     categoryCounts[catName] = (categoryCounts[catName] || 0) + 1;
   });
 
@@ -111039,13 +111091,19 @@ function populateModalSidebarFilters() {
     </label>
   `).join('');
 
-  supplierContainer.innerHTML = Object.keys(supplierCounts).sort().map(s => `
-    <label class="amazon-checkbox-item">
-      <input type="checkbox" class="amazon-filter-chk chk-modal-supplier" value="${s}" onchange="renderModalProductList()">
-      <span>${s}</span>
-      <span class="amazon-count-badge">(${supplierCounts[s]})</span>
-    </label>
-  `).join('');
+  if (supplierContainer) {
+    if (showSupplier) {
+      supplierContainer.innerHTML = Object.keys(supplierCounts).sort().map(s => `
+        <label class="amazon-checkbox-item">
+          <input type="checkbox" class="amazon-filter-chk chk-modal-supplier" value="${s}" onchange="renderModalProductList()">
+          <span>${s}</span>
+          <span class="amazon-count-badge">(${supplierCounts[s]})</span>
+        </label>
+      `).join('');
+    } else {
+      supplierContainer.innerHTML = '';
+    }
+  }
 
   categoryContainer.innerHTML = Object.keys(categoryCounts).sort().map(c => `
     <label class="amazon-checkbox-item">
@@ -111071,24 +111129,26 @@ function renderModalProductList() {
 
   const searchQuery = (document.getElementById("modalProductSearch")?.value || "").toLowerCase().trim();
   const sortOrder = document.getElementById("modalProductSort")?.value || "default";
+  const showSupplier = canViewSuppliers();
 
   const selectedBrands = Array.from(document.querySelectorAll('.chk-modal-brand:checked')).map(c => c.value);
-  const selectedSuppliers = Array.from(document.querySelectorAll('.chk-modal-supplier:checked')).map(c => c.value);
+  const selectedSuppliers = showSupplier ? Array.from(document.querySelectorAll('.chk-modal-supplier:checked')).map(c => c.value) : [];
   const selectedCategories = Array.from(document.querySelectorAll('.chk-modal-category:checked')).map(c => c.value);
 
   let filtered = appState.products.filter(p => {
     const { brand, supplier } = getProductBrandAndSupplier(p);
-    const categoryObj = appState.categories.find(c => c.id === p.categoryId);
-    const catName = categoryObj ? categoryObj.name : (p.category || "General");
+    const catName = getProductCategoryName(p);
+    const cleanDesc = sanitizeDescriptionForRole(p.description);
 
     const matchesSearch = !searchQuery ||
       p.sku.toLowerCase().includes(searchQuery) ||
       p.name.toLowerCase().includes(searchQuery) ||
       brand.toLowerCase().includes(searchQuery) ||
-      supplier.toLowerCase().includes(searchQuery);
+      (showSupplier && supplier.toLowerCase().includes(searchQuery)) ||
+      (cleanDesc && cleanDesc.toLowerCase().includes(searchQuery));
 
     const matchesBrand = selectedBrands.length === 0 || selectedBrands.includes(brand);
-    const matchesSupplier = selectedSuppliers.length === 0 || selectedSuppliers.includes(supplier);
+    const matchesSupplier = !showSupplier || selectedSuppliers.length === 0 || selectedSuppliers.includes(supplier);
     const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(catName);
 
     return matchesSearch && matchesBrand && matchesSupplier && matchesCategory;
@@ -111133,7 +111193,7 @@ function renderModalProductList() {
           </div>
           <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main);">${p.name}</div>
           <div style="font-size: 0.78rem; color: var(--text-muted);">
-            🏷️ Marca: <strong>${brand}</strong> | 🚚 Prov: <strong>${supplier}</strong> | 📦 Physical: <strong>${p.physicalStock}</strong> (Disp: <strong>${avail}</strong>)
+            🏷️ Marca: <strong>${brand}</strong> ${showSupplier ? `| 🚚 Prov: <strong>${supplier}</strong>` : ''} | 📦 Physical: <strong>${p.physicalStock}</strong> (Disp: <strong>${avail}</strong>)
           </div>
         </div>
         <button type="button" class="btn btn-primary" style="padding: 0.35rem 0.85rem; font-size: 0.82rem; white-space: nowrap;" onclick="selectProductFromModal('${p.id}')">
@@ -111161,12 +111221,13 @@ function handleCatalogSearchInput() {
     return;
   }
 
+  const showSupplier = canViewSuppliers();
   const matches = appState.products.filter(p => {
     const { brand, supplier } = getProductBrandAndSupplier(p);
     return p.sku.toLowerCase().includes(query) ||
            p.name.toLowerCase().includes(query) ||
            brand.toLowerCase().includes(query) ||
-           supplier.toLowerCase().includes(query);
+           (showSupplier && supplier.toLowerCase().includes(query));
   }).slice(0, 8);
 
   if (matches.length === 0) {
@@ -111175,7 +111236,7 @@ function handleCatalogSearchInput() {
   }
 
   dropdown.innerHTML = matches.map(p => {
-    const { brand, supplier } = getProductBrandAndSupplier(p);
+    const { brand } = getProductBrandAndSupplier(p);
     return `
       <div class="autocomplete-suggestion-item" onclick="selectCatalogSearchSuggestion('${p.sku}')">
         <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
@@ -111203,7 +111264,10 @@ function populateAmazonSidebarFilters() {
   const supplierListContainer = document.getElementById("filterSupplierList");
   const categoryListContainer = document.getElementById("filterCategoryList");
   const locationListContainer = document.getElementById("filterLocationList");
+  const supplierGroup = document.getElementById("filterSupplierGroup");
+  const showSupplier = canViewSuppliers();
 
+  if (supplierGroup) supplierGroup.style.display = showSupplier ? "" : "none";
   if (!brandListContainer) return;
 
   const brandCounts = {};
@@ -111213,10 +111277,9 @@ function populateAmazonSidebarFilters() {
   appState.products.forEach(p => {
     const { brand, supplier } = getProductBrandAndSupplier(p);
     brandCounts[brand] = (brandCounts[brand] || 0) + 1;
-    supplierCounts[supplier] = (supplierCounts[supplier] || 0) + 1;
+    if (showSupplier && supplier) supplierCounts[supplier] = (supplierCounts[supplier] || 0) + 1;
 
-    const categoryObj = appState.categories.find(c => c.id === p.categoryId);
-    const catName = categoryObj ? categoryObj.name : (p.category || "General");
+    const catName = getProductCategoryName(p);
     categoryCounts[catName] = (categoryCounts[catName] || 0) + 1;
   });
 
@@ -111228,13 +111291,19 @@ function populateAmazonSidebarFilters() {
     </label>
   `).join('');
 
-  supplierListContainer.innerHTML = Object.keys(supplierCounts).sort().map(s => `
-    <label class="amazon-checkbox-item">
-      <input type="checkbox" class="amazon-filter-chk chk-supplier" value="${s}" onchange="renderCatalog()">
-      <span>${s}</span>
-      <span class="amazon-count-badge">(${supplierCounts[s]})</span>
-    </label>
-  `).join('');
+  if (supplierListContainer) {
+    if (showSupplier) {
+      supplierListContainer.innerHTML = Object.keys(supplierCounts).sort().map(s => `
+        <label class="amazon-checkbox-item">
+          <input type="checkbox" class="amazon-filter-chk chk-supplier" value="${s}" onchange="renderCatalog()">
+          <span>${s}</span>
+          <span class="amazon-count-badge">(${supplierCounts[s]})</span>
+        </label>
+      `).join('');
+    } else {
+      supplierListContainer.innerHTML = '';
+    }
+  }
 
   categoryListContainer.innerHTML = Object.keys(categoryCounts).sort().map(c => `
     <label class="amazon-checkbox-item">
@@ -111287,9 +111356,10 @@ function renderCatalog() {
   const tableBody = document.getElementById("catalogTableBody");
   const searchQuery = (document.getElementById("catalogSearch")?.value || "").toLowerCase().trim();
   const sortOrder = document.getElementById("catalogSortOrder")?.value || "default";
+  const showSupplier = canViewSuppliers();
 
   const selectedBrands = getSelectedCheckboxValues('.chk-brand');
-  const selectedSuppliers = getSelectedCheckboxValues('.chk-supplier');
+  const selectedSuppliers = showSupplier ? getSelectedCheckboxValues('.chk-supplier') : [];
   const selectedCategories = getSelectedCheckboxValues('.chk-category');
   const selectedLocations = getSelectedCheckboxValues('.chk-location');
 
@@ -111307,19 +111377,19 @@ function renderCatalog() {
 
   let filtered = appState.products.filter(p => {
     const { brand, supplier } = getProductBrandAndSupplier(p);
-    const categoryObj = appState.categories.find(c => c.id === p.categoryId);
-    const catName = categoryObj ? categoryObj.name : (p.category || "General");
+    const catName = getProductCategoryName(p);
+    const cleanDesc = sanitizeDescriptionForRole(p.description);
 
     const matchesSearch = !searchQuery || 
       p.sku.toLowerCase().includes(searchQuery) || 
       p.name.toLowerCase().includes(searchQuery) ||
       brand.toLowerCase().includes(searchQuery) ||
-      supplier.toLowerCase().includes(searchQuery) ||
+      (showSupplier && supplier.toLowerCase().includes(searchQuery)) ||
       (p.barcode && p.barcode.toLowerCase().includes(searchQuery)) ||
-      (p.description && p.description.toLowerCase().includes(searchQuery));
+      (cleanDesc && cleanDesc.toLowerCase().includes(searchQuery));
 
     const matchesBrand = selectedBrands.length === 0 || selectedBrands.includes(brand);
-    const matchesSupplier = selectedSuppliers.length === 0 || selectedSuppliers.includes(supplier);
+    const matchesSupplier = !showSupplier || selectedSuppliers.length === 0 || selectedSuppliers.includes(supplier);
     const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(catName);
 
     let matchesLocation = true;
@@ -111381,8 +111451,8 @@ function renderCatalog() {
   tableBody.innerHTML = filtered.map(p => {
     const availableStock = p.physicalStock - p.reservedStock;
     const isSerialized = p.requiresSerial;
-    const categoryObj = appState.categories.find(c => c.id === p.categoryId);
-    const categoryName = categoryObj ? categoryObj.name : p.category;
+    const categoryName = getProductCategoryName(p);
+    const cleanDesc = sanitizeDescriptionForRole(p.description);
 
     // Actual count of registered serial numbers in appState.serializedItems
     const registeredSerialsCount = appState.serializedItems.filter(i => i.productId === p.id).length;
@@ -111408,10 +111478,10 @@ function renderCatalog() {
           <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.25rem;">
             ${p.reference ? `<span style="font-size: 0.72rem; padding: 0.1rem 0.35rem; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 4px; color: #93c5fd;">🔢 Ref: <strong>${p.reference}</strong></span>` : ''}
             ${p.brand ? `<span style="font-size: 0.72rem; padding: 0.1rem 0.35rem; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 4px; color: #6ee7b7;">🏷️ Marca: <strong>${p.brand}</strong></span>` : ''}
-            ${p.supplier ? `<span style="font-size: 0.72rem; padding: 0.1rem 0.35rem; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 4px; color: #fcd34d;">🚚 Prov: <strong>${p.supplier}</strong></span>` : ''}
+            ${(showSupplier && p.supplier) ? `<span style="font-size: 0.72rem; padding: 0.1rem 0.35rem; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 4px; color: #fcd34d;">🚚 Prov: <strong>${p.supplier}</strong></span>` : ''}
             <span class="badge badge-purple" style="font-size: 0.7rem; padding: 0.12rem 0.45rem;">${categoryName}</span>
           </div>
-          ${p.description && !p.description.startsWith('Ref:') ? `<div style="font-size: 0.73rem; color: var(--text-muted);">${p.description}</div>` : ''}
+          ${cleanDesc && !cleanDesc.startsWith('Ref:') ? `<div style="font-size: 0.73rem; color: var(--text-muted);">${cleanDesc}</div>` : ''}
         </td>
         <td>
           <div style="font-size: 0.83rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
@@ -114007,7 +114077,11 @@ function handleCreateProduct(e) {
   const reference = document.getElementById("newReference") ? document.getElementById("newReference").value.trim() : "";
   const brand = document.getElementById("newBrand") ? document.getElementById("newBrand").value.trim() : "";
   const supplier = document.getElementById("newSupplier") ? document.getElementById("newSupplier").value.trim() : "";
-  const categoryId = document.getElementById("newCategory").value;
+  const newCategorySelect = document.getElementById("newCategory");
+  const categoryId = newCategorySelect ? newCategorySelect.value : "";
+  const selectedCatText = (newCategorySelect && newCategorySelect.selectedIndex >= 0) ? newCategorySelect.options[newCategorySelect.selectedIndex].text.trim() : "";
+  const categoryObj = getCategoryObj(categoryId) || (selectedCatText ? getCategoryObj(selectedCatText) : null);
+
   const unit = document.getElementById("newUnit").value;
   const reqSerial = document.getElementById("newReqSerial").value === "true";
   const minStock = parseInt(document.getElementById("newMinStock").value) || 0;
@@ -114039,13 +114113,14 @@ function handleCreateProduct(e) {
     }
   }
 
-  const categoryObj = appState.categories.find(c => c.id === categoryId);
-
   const descParts = [];
   if (reference) descParts.append ? descParts.push(`Ref: ${reference}`) : descParts.push(`Ref: ${reference}`);
   if (brand) descParts.push(`Marca: ${brand}`);
   if (supplier) descParts.push(`Prov: ${supplier}`);
   const description = descParts.length > 0 ? descParts.join(' | ') : "Ingresado manualmente al catálogo";
+
+  const resolvedCategoryName = categoryObj ? categoryObj.name : (selectedCatText || "General");
+  const resolvedCategoryId = categoryObj ? categoryObj.id : categoryId;
 
   const newProd = {
     id: `prod-${Date.now()}`,
@@ -114056,8 +114131,8 @@ function handleCreateProduct(e) {
     brand,
     supplier,
     description,
-    categoryId,
-    category: categoryObj ? categoryObj.name : "General",
+    categoryId: resolvedCategoryId,
+    category: resolvedCategoryName,
     requiresSerial: reqSerial,
     unitOfMeasure: unit,
     minStockAlert: minStock,
@@ -114109,20 +114184,11 @@ function openEditProductModal(productId) {
   if (document.getElementById("editReference")) {
     document.getElementById("editReference").value = product.reference || "";
   }
-  if (document.getElementById("editModalReference")) {
-    document.getElementById("editModalReference").value = product.reference || "";
-  }
   if (document.getElementById("editBrand")) {
     document.getElementById("editBrand").value = product.brand || "";
   }
-  if (document.getElementById("editModalBrand")) {
-    document.getElementById("editModalBrand").value = product.brand || "";
-  }
   if (document.getElementById("editSupplier")) {
     document.getElementById("editSupplier").value = product.supplier || "";
-  }
-  if (document.getElementById("editModalSupplier")) {
-    document.getElementById("editModalSupplier").value = product.supplier || "";
   }
   document.getElementById("editDescription").value = product.description || "";
   document.getElementById("editUnit").value = product.unitOfMeasure || "UNIDAD";
@@ -114131,14 +114197,8 @@ function openEditProductModal(productId) {
   if (document.getElementById("editSalePrice2")) {
     document.getElementById("editSalePrice2").value = (product.salePrice2 !== undefined) ? product.salePrice2 : 0;
   }
-  if (document.getElementById("editModalSalePrice2")) {
-    document.getElementById("editModalSalePrice2").value = (product.salePrice2 !== undefined) ? product.salePrice2 : 0;
-  }
   if (document.getElementById("editSalePrice3")) {
     document.getElementById("editSalePrice3").value = (product.salePrice3 !== undefined) ? product.salePrice3 : 0;
-  }
-  if (document.getElementById("editModalSalePrice3")) {
-    document.getElementById("editModalSalePrice3").value = (product.salePrice3 !== undefined) ? product.salePrice3 : 0;
   }
   document.getElementById("editPhysicalStock").value = (product.physicalStock !== undefined) ? product.physicalStock : 0;
   document.getElementById("editReservedStock").value = (product.reservedStock !== undefined) ? product.reservedStock : 0;
@@ -114149,12 +114209,20 @@ function openEditProductModal(productId) {
   // Populate Categories
   const categorySelect = document.getElementById("editCategory");
   if (categorySelect) {
-    const currentCat = (product.category || product.categoryId || "").toString().trim().toUpperCase();
+    const currentCatObj = getCategoryObj(product);
+    const currentCatId = currentCatObj ? String(currentCatObj.id) : (product.categoryId ? String(product.categoryId) : "");
+    const currentCatName = (currentCatObj?.name || product.category || "").toString().trim().toUpperCase();
+
     categorySelect.innerHTML = appState.categories.map(c => {
+      const cIdStr = String(c.id);
       const cName = (c.name || "").toString().trim().toUpperCase();
-      const isSelected = (cName === currentCat || String(c.id) === String(product.categoryId) || String(c.id) === String(product.category));
+      const isSelected = (currentCatId && cIdStr === currentCatId) || (currentCatName && cName === currentCatName);
       return `<option value="${c.id}" ${isSelected ? 'selected' : ''}>${c.name}</option>`;
     }).join('');
+
+    if (currentCatObj) {
+      categorySelect.value = String(currentCatObj.id);
+    }
   }
 
   // Populate Stock by Location Container
@@ -114318,7 +114386,12 @@ function handleUpdateProduct(e) {
   const brand = document.getElementById("editBrand") ? document.getElementById("editBrand").value.trim() : (product.brand || "");
   const supplier = document.getElementById("editSupplier") ? document.getElementById("editSupplier").value.trim() : (product.supplier || "");
   const description = document.getElementById("editDescription").value.trim();
-  const categoryId = document.getElementById("editCategory").value;
+  
+  const categorySelect = document.getElementById("editCategory");
+  const selectedCatId = categorySelect ? categorySelect.value : "";
+  const selectedCatText = (categorySelect && categorySelect.selectedIndex >= 0) ? categorySelect.options[categorySelect.selectedIndex].text.trim() : "";
+  const categoryObj = getCategoryObj(selectedCatId) || (selectedCatText ? getCategoryObj(selectedCatText) : null);
+
   const unitOfMeasure = document.getElementById("editUnit").value;
   const rawBaseCost = parseFloat(document.getElementById("editBaseCost")?.value);
   const baseCost = !isNaN(rawBaseCost) && rawBaseCost > 0 ? rawBaseCost : (product.baseCost || 0);
@@ -114356,8 +114429,6 @@ function handleUpdateProduct(e) {
     }
   }
 
-  const categoryObj = appState.categories.find(c => c.id === categoryId);
-
   // Collect Stock by Location and recalculate physicalStock
   let physicalStock = 0;
   const stockByLocation = {};
@@ -114368,6 +114439,9 @@ function handleUpdateProduct(e) {
     physicalStock += val;
   });
 
+  const resolvedCategoryName = categoryObj ? categoryObj.name : (selectedCatText || "General");
+  const resolvedCategoryId = categoryObj ? categoryObj.id : selectedCatId;
+
   // Update object properties
   product.sku = sku;
   product.barcode = barcode || sku;
@@ -114376,8 +114450,8 @@ function handleUpdateProduct(e) {
   product.brand = brand;
   product.supplier = supplier;
   product.description = description;
-  product.categoryId = categoryId;
-  product.category = categoryObj ? categoryObj.name : "General";
+  product.categoryId = resolvedCategoryId;
+  product.category = resolvedCategoryName;
   product.unitOfMeasure = unitOfMeasure;
   product.baseCost = baseCost;
   product.salePrice = salePrice;
@@ -114623,12 +114697,23 @@ async function loadAllFromAPI(shouldRenderAll = true) {
       appState.locations = locations;
       localStorage.setItem("mascampo_locations_db", JSON.stringify(locations));
     }
+    if (Array.isArray(categories) && categories.length > 0) {
+      appState.categories = categories;
+      localStorage.setItem("mascampo_categories_db", JSON.stringify(categories));
+    }
     if (Array.isArray(products) && products.length > 0) {
       products.forEach(p => {
         if (!p.stockByLocation && p.locationStock) {
           p.stockByLocation = p.locationStock;
         } else if (p.stockByLocation && !p.locationStock) {
           p.locationStock = p.stockByLocation;
+        }
+        const catObj = getCategoryObj(p);
+        if (catObj) {
+          p.categoryId = catObj.id;
+          p.category = catObj.name;
+        } else if (!p.category || p.category.trim() === '') {
+          p.category = "General";
         }
       });
       appState.products = products;
@@ -114649,10 +114734,6 @@ async function loadAllFromAPI(shouldRenderAll = true) {
     if (Array.isArray(serials) && serials.length > 0) {
       appState.serializedItems = serials;
       localStorage.setItem("mascampo_serialized_items_db", JSON.stringify(serials));
-    }
-    if (Array.isArray(categories) && categories.length > 0) {
-      appState.categories = categories;
-      localStorage.setItem("mascampo_categories_db", JSON.stringify(categories));
     }
     if (Array.isArray(pendingIntakes) && pendingIntakes.length > 0) {
       appState.pendingIntakes = pendingIntakes;
