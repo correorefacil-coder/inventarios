@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'inventarios-backend',
+      name: 'inventarios',
       script: 'backend/api.py',
       interpreter: 'python3',
       instances: 1,
