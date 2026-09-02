@@ -108226,7 +108226,9 @@ const ROLE_PERMISSIONS = {
     canUploadSigo: true,
     canManageUsers: true,
     canViewAudit: true,
-    canExportReports: true
+    canExportReports: true,
+    canReleaseReservation: true,
+    canCreateReservation: true
   },
   SUPERADMINISTRADOR: {
     views: ['view-dashboard', 'view-sigo-intake', 'view-catalog', 'view-edit-product', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-users', 'view-audit-logs', 'view-forecasting', 'view-reports'],
@@ -108238,7 +108240,9 @@ const ROLE_PERMISSIONS = {
     canUploadSigo: true,
     canManageUsers: true,
     canViewAudit: true,
-    canExportReports: true
+    canExportReports: true,
+    canReleaseReservation: true,
+    canCreateReservation: true
   },
   LOGISTICA: {
     views: ['view-dashboard', 'view-catalog', 'view-edit-product', 'view-locations', 'view-pending-validations', 'view-kardex', 'view-equipment', 'view-customers-analytics', 'view-reservations', 'view-forecasting'],
@@ -108250,10 +108254,12 @@ const ROLE_PERMISSIONS = {
     canUploadSigo: false,
     canManageUsers: false,
     canViewAudit: false,
-    canExportReports: false
+    canExportReports: false,
+    canReleaseReservation: true,
+    canCreateReservation: true
   },
   VENTAS: {
-    views: ['view-dashboard', 'view-catalog', 'view-equipment', 'view-customers-analytics', 'view-reservations'],
+    views: ['view-dashboard', 'view-catalog', 'view-equipment', 'view-reservations'],
     canEditCatalog: false,
     canEditCustomers: false,
     canApprovePendingIntakes: false,
@@ -108262,7 +108268,9 @@ const ROLE_PERMISSIONS = {
     canUploadSigo: false,
     canManageUsers: false,
     canViewAudit: false,
-    canExportReports: false
+    canExportReports: false,
+    canReleaseReservation: false,
+    canCreateReservation: false
   }
 };
 
@@ -108298,6 +108306,11 @@ function canManageCatalog(roleOrUser) {
 function canViewSuppliers(roleOrUser) {
   const perms = getRolePermissions(roleOrUser || appState.currentUser);
   return perms.canViewSuppliers !== false;
+}
+
+function canReleaseReservation(roleOrUser) {
+  const perms = getRolePermissions(roleOrUser || appState.currentUser);
+  return perms.canReleaseReservation !== false;
 }
 
 function sanitizeDescriptionForRole(desc, roleOrUser) {
@@ -108355,7 +108368,11 @@ function toggleFinancialFields(role) {
   const btnAdminUsers = document.getElementById("btnAdminUsers");
   if (btnAdminUsers) btnAdminUsers.style.display = perms.canManageUsers ? "inline-flex" : "none";
 
-  // 8. Banner RBAC Info
+  // 8. Reservation Creation Button
+  const btnOpenNewReservation = document.getElementById("btnOpenNewReservation");
+  if (btnOpenNewReservation) btnOpenNewReservation.style.display = perms.canCreateReservation ? "inline-flex" : "none";
+
+  // 9. Banner RBAC Info
   const rbacBanner = document.getElementById("rbacBanner");
   const activeRoleName = document.getElementById("activeRoleName");
   if (rbacBanner && activeRoleName) {
@@ -108367,7 +108384,7 @@ function toggleFinancialFields(role) {
     }
   }
 
-  // 8. Safe View Redirection
+  // 10. Safe View Redirection
   const currentActiveSection = document.querySelector('.view-section.active');
   if (currentActiveSection && !perms.views.includes(currentActiveSection.id)) {
     switchView('view-dashboard');
@@ -113066,13 +113083,20 @@ function renderReservations() {
       ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.76rem;">LIBERADA</span>`
       : `<span class="badge badge-amber" style="font-size: 0.76rem;">ACTIVA</span>`;
 
-    const actionButton = isLiberada
-      ? `<button class="btn btn-secondary" disabled style="padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; opacity: 0.45; cursor: not-allowed; border-color: rgba(148, 163, 184, 0.3); color: var(--text-muted);">
+    const canRelease = canReleaseReservation();
+
+    let actionButton = '';
+    if (isLiberada) {
+      actionButton = `<button class="btn btn-secondary" disabled style="padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; opacity: 0.45; cursor: not-allowed; border-color: rgba(148, 163, 184, 0.3); color: var(--text-muted);">
           ✅ Liberada
-        </button>`
-      : `<button class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" onclick="cancelReservation('${r.id}')">
+        </button>`;
+    } else if (!canRelease) {
+      actionButton = `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">Solo lectura</span>`;
+    } else {
+      actionButton = `<button class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" onclick="cancelReservation('${r.id}')">
           🔓 Liberar Stock
         </button>`;
+    }
 
     return `
       <tr style="${isLiberada ? 'opacity: 0.78;' : ''}">
@@ -113119,6 +113143,10 @@ function updateResAvailableStockInfo() {
 
 function handleCreateReservation(e) {
   e.preventDefault();
+  if (!canReleaseReservation(appState.currentUser)) {
+    alert("🔒 Restricción de permisos: El perfil de Ventas no tiene permisos para crear reservas de stock.");
+    return;
+  }
   let customerId = document.getElementById("resCustomerSelect") ? document.getElementById("resCustomerSelect").value : "";
   let productId = document.getElementById("resProductSelect") ? document.getElementById("resProductSelect").value : "";
   const locationId = document.getElementById("resLocationSelect") ? document.getElementById("resLocationSelect").value : "";
@@ -113356,6 +113384,11 @@ document.addEventListener("click", function(e) {
 });
 
 function cancelReservation(resId) {
+  if (!canReleaseReservation(appState.currentUser)) {
+    alert("🔒 Restricción de permisos: El perfil de Ventas no tiene permisos para liberar reservas de stock.");
+    return;
+  }
+
   const res = appState.reservations.find(r => r.id === resId);
   if (!res) return;
 
@@ -114523,6 +114556,10 @@ function handleUpdateProduct(e) {
 }
 
 function openReservationModal() {
+  if (!canReleaseReservation(appState.currentUser)) {
+    alert("🔒 Restricción de permisos: El perfil de Ventas solo tiene permisos de visualización en el módulo de reservas.");
+    return;
+  }
   document.getElementById("reservationModal").classList.add("active");
   const custInput = document.getElementById("resCustomerInput");
   const prodInput = document.getElementById("resProductInput");
