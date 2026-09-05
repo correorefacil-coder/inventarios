@@ -111542,6 +111542,18 @@ function renderCatalog() {
   toggleFinancialFields(appState.currentUser.role);
 }
 
+function normalizeSerial(str) {
+  if (!str) return "";
+  let s = str.trim().toUpperCase();
+  // Quitar sufijos de fecha como /26-02-2025 o /2026-08-05 si vienen adjuntos
+  if (s.includes('/')) {
+    s = s.split('/')[0].trim();
+  }
+  // Corregir patrones donde se digitó 'CZO' (letra O) en vez de 'CZ0' (número 0) seguido de dígitos
+  s = s.replace(/^CZO(\d)/, 'CZ0$1');
+  return s;
+}
+
 function openSerialInspectorModal(productId) {
   const product = appState.products.find(p => p.id === productId);
   if (!product) return;
@@ -111563,15 +111575,16 @@ function openSerialInspectorModal(productId) {
         Mostrando los ${inStockItems.length} seriales individuales presentes en bodega:
       </div>
       ${inStockItems.map((item, index) => {
-        const locObj = appState.locations.find(l => l.id === item.currentLocationId);
-        const locName = locObj ? locObj.name : "Bodega Principal";
+        const locId = item.locationId || item.currentLocationId || "loc-1";
+        const locObj = appState.locations.find(l => l.id === locId);
+        const locName = locObj ? locObj.name : "Bodega Central";
         return `
           <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); padding: 0.6rem 0.75rem; border-radius: var(--radius-sm); margin-bottom: 0.4rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
             <div>
               <span style="font-size: 0.75rem; color: var(--text-muted); margin-right: 0.4rem;">#${index + 1}</span>
               <strong style="color: var(--accent-green); font-family: monospace; font-size: 0.95rem;">${item.serialNumber}</strong>
               <div style="font-size: 0.73rem; color: var(--text-muted);">
-                📍 Ubicación: <strong style="color: var(--accent-teal);">${locName}</strong> | Ingresó: ${item.entryDate}
+                📍 Ubicación: <strong style="color: var(--accent-teal);">${locName}</strong> | Ingresó: ${item.entryDate || '-'}
               </div>
             </div>
             <div style="display: flex; gap: 0.4rem; align-items: center;">
@@ -111591,7 +111604,7 @@ function openSerialInspectorModal(productId) {
     exitedList.innerHTML = `<div style="color: var(--text-muted); padding: 0.5rem;">No hay seriales reportados como salidos o vendidos.</div>`;
   } else {
     exitedList.innerHTML = exitedItems.map(item => {
-      const customer = appState.customers.find(c => c.id === item.currentCustomerId);
+      const customer = appState.customers.find(c => c.id === item.currentCustomerId || c.documentNumber === item.currentCustomerId);
       const attachmentsCount = item.attachments ? item.attachments.length : 0;
       return `
         <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); padding: 0.6rem 0.75rem; border-radius: var(--radius-sm); margin-bottom: 0.4rem;">
@@ -111621,8 +111634,8 @@ function openSerialInspectorModal(productId) {
   const regPanel = document.getElementById("inspectorRegistrationPanel");
   if (regPanel) {
     if (product.requiresSerial) {
-      const totalSerialsCount = appState.serializedItems.filter(i => i.productId === productId).length;
-      const unassignedQty = Math.max(0, product.physicalStock - totalSerialsCount);
+      const inStockCount = appState.serializedItems.filter(i => i.productId === productId && i.status === 'EN_STOCK').length;
+      const unassignedQty = Math.max(0, product.physicalStock - inStockCount);
 
       regPanel.innerHTML = `
         <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid var(--border-highlight); padding: 0.85rem 1rem; border-radius: var(--radius-md);">
@@ -111673,20 +111686,91 @@ function openSerialInspectorModal(productId) {
   document.getElementById("serialInspectorModal").classList.add("active");
 }
 
+function submitRegisterProductSerial(productId) {
+  const product = appState.products.find(p => p.id === productId);
+  if (!product) return;
+
+  const inputEl = document.getElementById("regSerialInput");
+  const locEl = document.getElementById("regSerialLocSelect");
+  const rawSerial = inputEl ? inputEl.value : "";
+  const locationId = locEl ? locEl.value : "loc-1";
+
+  if (!rawSerial || rawSerial.trim() === "") {
+    alert("⚠️ Por favor digite o escanee un número de serie válido.");
+    return;
+  }
+
+  const serial = normalizeSerial(rawSerial);
+  if (!appState.serializedItems) appState.serializedItems = [];
+
+  const duplicate = appState.serializedItems.find(i => normalizeSerial(i.serialNumber) === serial && i.status === 'EN_STOCK');
+  if (duplicate) {
+    alert(`❌ El serial '${serial}' ya se encuentra registrado con estado 'EN_STOCK' en el inventario.`);
+    return;
+  }
+
+  const nowIso = new Date().toISOString().substring(0, 10);
+  const newSerialItem = {
+    id: `ser-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+    productId: product.id,
+    productSku: product.sku,
+    productName: product.name,
+    serialNumber: serial,
+    status: "EN_STOCK",
+    locationId: locationId,
+    currentLocationId: locationId,
+    currentCustomerId: null,
+    entryDate: nowIso,
+    saleDate: null,
+    invoiceNumber: null,
+    attachments: [],
+    events: [],
+    history: [{
+      type: "REGISTRO_MANUAL",
+      date: nowIso,
+      user: appState.currentUser ? appState.currentUser.name : 'Usuario',
+      description: `Asignación manual de número de serie de fábrica (${serial})`
+    }]
+  };
+
+  appState.serializedItems.push(newSerialItem);
+  saveSerializedItemsToDisk();
+  addActivityLog("CREACION", "ProductSerialInspector", `Asignación de nuevo serial '${serial}' para producto '${product.sku}'.`);
+
+  alert(`✅ Serial '${serial}' asignado exitosamente al producto.`);
+  openSerialInspectorModal(product.id);
+  renderAllViews();
+}
+
+function scanSerialForProductRegistration(productId) {
+  startCameraScanner((code) => {
+    if (!code) return;
+    const inputEl = document.getElementById("regSerialInput");
+    if (inputEl) {
+      inputEl.value = normalizeSerial(code);
+    }
+  });
+}
+
 function editSerialNumber(itemId) {
   const item = appState.serializedItems.find(i => i.id === itemId);
   if (!item) return;
 
-  const newSerial = prompt("Digite el número de serie único asignado por fábrica a esta unidad:", item.serialNumber);
-  if (newSerial && newSerial.trim() !== "" && newSerial !== item.serialNumber) {
-    const oldSerial = item.serialNumber;
-    item.serialNumber = newSerial.trim();
-    addActivityLog("MODIFICACION", "SerialUpdate", `Serial '${oldSerial}' modificado manualmente a '${item.serialNumber}'`);
-    alert(`✅ Número de serie actualizado a: ${item.serialNumber}`);
-    
-    const product = appState.products.find(p => p.id === item.productId);
-    if (product) openSerialInspectorModal(product.id);
-    populateDropdowns();
+  const newSerialRaw = prompt("Digite el número de serie único asignado por fábrica a esta unidad:", item.serialNumber);
+  if (newSerialRaw && newSerialRaw.trim() !== "") {
+    const newSerial = normalizeSerial(newSerialRaw);
+    if (newSerial !== item.serialNumber) {
+      const oldSerial = item.serialNumber;
+      item.serialNumber = newSerial;
+      saveSerializedItemsToDisk();
+      addActivityLog("MODIFICACION", "SerialUpdate", `Serial '${oldSerial}' modificado manualmente a '${item.serialNumber}'`);
+      alert(`✅ Número de serie actualizado a: ${item.serialNumber}`);
+      
+      const product = appState.products.find(p => p.id === item.productId);
+      if (product) openSerialInspectorModal(product.id);
+      populateDropdowns();
+      renderAllViews();
+    }
   }
 }
 
@@ -111917,14 +112001,14 @@ function updateKardexSerialUI() {
   if (isExit && availablePicker && availableList) {
     availablePicker.style.display = "block";
     const availItems = (appState.serializedItems || []).filter(i => 
-      i.productId === product.id && i.status === 'EN_STOCK' && i.currentLocationId === locationId
+      i.productId === product.id && i.status === 'EN_STOCK' && ((i.locationId || i.currentLocationId || 'loc-1') === locationId || !locationId)
     );
     if (availItems.length === 0) {
       availableList.innerHTML = `<span style="color: var(--accent-red); font-size: 0.78rem;">⚠️ No hay seriales en stock disponibles en esta sede (${availItems.length}).</span>`;
     } else {
       const currentSelected = parseEnteredKardexSerials();
       availableList.innerHTML = availItems.map(item => {
-        const isChecked = currentSelected.includes(item.serialNumber);
+        const isChecked = currentSelected.some(s => normalizeSerial(s) === normalizeSerial(item.serialNumber));
         return `
           <button type="button" class="badge" style="cursor: pointer; padding: 0.25rem 0.5rem; font-family: monospace; font-size: 0.78rem; background: ${isChecked ? 'var(--accent-green)' : 'rgba(255,255,255,0.08)'}; color: ${isChecked ? '#0f172a' : 'var(--text-main)'}; border: 1px solid ${isChecked ? 'var(--accent-green)' : 'var(--border-color)'}; font-weight: ${isChecked ? '700' : '500'};" onclick="toggleKardexAvailableSerialChoice('${item.serialNumber}')">
             ${isChecked ? '✓ ' : '+ '}${item.serialNumber}
@@ -111941,16 +112025,17 @@ function updateKardexSerialUI() {
 
 function parseEnteredKardexSerials() {
   const raw = document.getElementById("movSerial")?.value || "";
-  return raw.split(/[\n,;\t]+/).map(s => s.trim()).filter(Boolean);
+  return raw.split(/[\n,;\t]+/).map(s => normalizeSerial(s)).filter(Boolean);
 }
 
 function toggleKardexAvailableSerialChoice(serialNum) {
   const current = parseEnteredKardexSerials();
-  const idx = current.indexOf(serialNum);
+  const norm = normalizeSerial(serialNum);
+  const idx = current.findIndex(s => normalizeSerial(s) === norm);
   if (idx > -1) {
     current.splice(idx, 1);
   } else {
-    current.push(serialNum);
+    current.push(norm);
   }
   const movSerialInput = document.getElementById("movSerial");
   if (movSerialInput) {
@@ -111984,15 +112069,16 @@ function handleKardexSerialTextInput() {
 function openCameraForKardexSerial() {
   startCameraScanner((code) => {
     if (!code) return;
+    const cleanCode = normalizeSerial(code);
     const current = parseEnteredKardexSerials();
-    if (!current.includes(code.trim())) {
-      current.push(code.trim());
+    if (!current.some(s => normalizeSerial(s) === cleanCode)) {
+      current.push(cleanCode);
       const input = document.getElementById("movSerial");
       if (input) input.value = current.join(", ");
       updateKardexSerialUI();
-      alert(`📷 Serial escaneado y agregado: ${code.trim()}`);
+      alert(`📷 Serial escaneado y agregado: ${cleanCode}`);
     } else {
-      alert(`⚠️ El serial '${code.trim()}' ya fue agregado a la lista.`);
+      alert(`⚠️ El serial '${cleanCode}' ya fue agregado a la lista.`);
     }
   });
 }
@@ -112165,7 +112251,8 @@ async function handleCreateMovement(e) {
   // Serial Validations and Assignments
   if (isSerialized && (type === 'INGRESO_COMPRA' || type === 'ENTRADA' || type === 'AJUSTE_AGREGAR')) {
     for (const sn of parsedSerials) {
-      const existing = (appState.serializedItems || []).find(i => i.serialNumber === sn && i.status === 'EN_STOCK');
+      const norm = normalizeSerial(sn);
+      const existing = (appState.serializedItems || []).find(i => normalizeSerial(i.serialNumber) === norm && i.status === 'EN_STOCK');
       if (existing) {
         alert(`❌ ERROR DE SERIAL DUPLICADO:\n\nEl serial '${sn}' ya se encuentra registrado con estado 'EN_STOCK' en el inventario.`);
         return;
@@ -112173,15 +112260,17 @@ async function handleCreateMovement(e) {
     }
 
     parsedSerials.forEach(sn => {
-      let serialItem = (appState.serializedItems || []).find(i => i.serialNumber === sn);
+      const norm = normalizeSerial(sn);
+      let serialItem = (appState.serializedItems || []).find(i => normalizeSerial(i.serialNumber) === norm);
       if (!serialItem) {
         serialItem = {
           id: `ser-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
           productId: prodId,
           productSku: product.sku,
           productName: product.name,
-          serialNumber: sn,
+          serialNumber: norm,
           status: "EN_STOCK",
+          locationId: locationId,
           currentLocationId: locationId,
           currentCustomerId: null,
           entryDate: movDate,
@@ -112198,7 +112287,9 @@ async function handleCreateMovement(e) {
         appState.serializedItems.push(serialItem);
       } else {
         serialItem.status = "EN_STOCK";
+        serialItem.locationId = locationId;
         serialItem.currentLocationId = locationId;
+        if (!serialItem.history) serialItem.history = [];
         serialItem.history.push({
           type: "INGRESO_COMPRA",
           date: movDate,
@@ -112207,12 +112298,16 @@ async function handleCreateMovement(e) {
         });
       }
     });
+    saveSerializedItemsToDisk();
   }
 
   if (isSerialized && (type === 'SALIDA_VENTA' || type === 'GARANTIA_REEMPLAZO' || type === 'AJUSTE_QUITAR')) {
     for (const sn of parsedSerials) {
+      const norm = normalizeSerial(sn);
       const serialItem = (appState.serializedItems || []).find(i => 
-        i.serialNumber === sn && (i.productId === prodId || !i.productId) && i.status === 'EN_STOCK'
+        (normalizeSerial(i.serialNumber) === norm || i.serialNumber === sn) && 
+        (i.productId === prodId || !i.productId) && 
+        i.status === 'EN_STOCK'
       );
       if (!serialItem) {
         alert(`❌ SERIAL NO DISPONIBLE:\n\nEl serial '${sn}' no se encuentra disponible en stock para salida en este producto.`);
@@ -112221,8 +112316,11 @@ async function handleCreateMovement(e) {
     }
 
     parsedSerials.forEach(sn => {
+      const norm = normalizeSerial(sn);
       const serialItem = (appState.serializedItems || []).find(i => 
-        i.serialNumber === sn && (i.productId === prodId || !i.productId) && i.status === 'EN_STOCK'
+        (normalizeSerial(i.serialNumber) === norm || i.serialNumber === sn) && 
+        (i.productId === prodId || !i.productId) && 
+        i.status === 'EN_STOCK'
       );
       if (serialItem) {
         if (type === 'SALIDA_VENTA') {
@@ -112236,6 +112334,7 @@ async function handleCreateMovement(e) {
         } else if (type === 'GARANTIA_REEMPLAZO') {
           serialItem.status = "GARANTIA_REEMPLAZO";
         }
+        if (!serialItem.history) serialItem.history = [];
         serialItem.history.push({
           type: type === 'SALIDA_VENTA' ? 'VENTA' : type,
           date: movDate,
@@ -112245,6 +112344,7 @@ async function handleCreateMovement(e) {
         });
       }
     });
+    saveSerializedItemsToDisk();
   }
 
   // Stock updates
